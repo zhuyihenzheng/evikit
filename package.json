@@ -1,0 +1,48 @@
+{
+  "name": "evikit",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "テストエビデンス成果物ジェネレータ (Excel + HTML)",
+  "bin": {
+    "evi": "src/cli.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "export": "bun run scripts/prepare-demo.ts && bun run src/cli.ts export examples/sample",
+    "build": "bun run --bun vite build",
+    "typecheck": "bun run --bun tsc --noEmit",
+    "start": "bun run scripts/prepare-demo.ts && bun run build && bun run src/cli.ts serve examples/sample",
+    "serve": "bun run src/cli.ts serve",
+    "check": "bun run typecheck && bun test && bun run build",
+    "format": "bun run --bun prettier --write src tests vite.config.ts tsconfig.json package.json README.md docs/05-architecture.md"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "exceljs": "^4.4.0",
+    "hono": "^4.13.7",
+    "image-size": "^2.0.2",
+    "jszip": "^3.10.1",
+    "lucide-react": "^1.41.0",
+    "papaparse": "^5.7.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "sharp": "^0.35.4",
+    "sql-formatter": "^15.8.2",
+    "xml-formatter": "^3.7.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "prettier": "^3.9.6",
+    "vite": "^8.2.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

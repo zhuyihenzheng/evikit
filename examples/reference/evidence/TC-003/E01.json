@@ -1,0 +1,13 @@
+GET /api/customers/export?from=2026-09-01 HTTP/1.1
+Host: stg.example.local
+Accept: application/json
+
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=UTF-8
+
+{
+  "status": "ok",
+  "count": 3,
+  "download_url": "stg.example.local/downloads/customers_20260904.csv",
+  "expires_at": "2026-09-04T12:00:00+09:00"
+}

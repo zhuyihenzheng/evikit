@@ -1,0 +1,12 @@
+2026-09-04 10:12:03.114 INFO  GET /login remote=192.168.10.34 session=-
+2026-09-04 10:12:03.180 DEBUG render login form locale=ja_JP theme=default
+2026-09-04 10:12:29.402 DEBUG form submitted fields=[user_id, password]
+2026-09-04 10:12:31.902 INFO  POST /login user=U001 remote=192.168.10.34
+2026-09-04 10:12:31.955 DEBUG select user_id, password_hash, status from users where user_id = ?
+2026-09-04 10:12:32.011 DEBUG password verify ok algorithm=bcrypt cost=10
+2026-09-04 10:12:32.048 INFO  login success user=U001 session=a1b2c3d4e5f6
+2026-09-04 10:12:32.061 DEBUG update users set last_login_at = ? where user_id = ?
+2026-09-04 10:12:32.077 INFO  last_login_at updated user=U001 value=2026-09-04 10:12:35
+2026-09-04 10:12:32.090 INFO  redirect to /home user=U001
+2026-09-04 10:12:32.412 INFO  GET /home user=U001 status=200 elapsed=118ms
+2026-09-04 10:12:32.559 DEBUG render header displayName=山田 太郎

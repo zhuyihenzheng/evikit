@@ -1,0 +1,2 @@
+user_id,failed_at,ip_address,reason
+U001,2026-09-04 10:21:07,192.168.10.34,BAD_PASSWORD

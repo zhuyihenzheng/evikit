@@ -1,0 +1,8 @@
+[Log] navigated to stg.example.local/login
+[Log] POST /api/auth/login 401 (Unauthorized)
+[Warning] i18n key not found: auth.invalid_credentials
+[Warning] falling back to default locale message
+[Error] login failed: Invalid credentials
+[Log] focus restored to input#password
+[Log] retry counter = 1
+[Log] idle

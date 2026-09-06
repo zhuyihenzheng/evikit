@@ -1,0 +1,74 @@
+{
+  "id": "TC-DEMO01",
+  "title": "ログインと顧客データの確認",
+  "tester": "テスト担当者",
+  "date": "2026-09-06",
+  "env": "検証環境",
+  "precondition": "サンプル専用の架空データ。実システムへの接続はありません。",
+  "verdict": "",
+  "note": "まずこのプロジェクトのコピーで貼り付け・注釈・保存・出力を試してください。",
+  "steps": [
+    {
+      "no": 1,
+      "action": "ログイン画面を確認する",
+      "expected": "ユーザー ID とパスワード欄が表示される",
+      "actual": "表示を確認",
+      "verdict": "OK"
+    },
+    {
+      "no": 2,
+      "action": "顧客レコードとアプリケーションログを確認する",
+      "expected": "customer_id の先頭ゼロが保持され、ログに成功が記録される",
+      "actual": "00012 / login success を確認",
+      "verdict": "OK"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E01",
+      "kind": "image",
+      "category": "画面",
+      "caption": "ログイン画面",
+      "step": 1,
+      "file": "E01.png",
+      "capturedAt": "2026-09-06T09:00:00+09:00",
+      "source": "架空のサンプル画面",
+      "note": "",
+      "sha256": "c026b0cce8d436225e6e1258269f491c88bbbe5eae195c18550c998f6a0c526d",
+      "lang": "",
+      "originalName": "",
+      "size": 24954
+    },
+    {
+      "id": "E02",
+      "kind": "table",
+      "category": "DB",
+      "caption": "顧客レコード",
+      "step": 2,
+      "file": "E02.csv",
+      "capturedAt": "2026-09-06T09:00:00+09:00",
+      "source": "SELECT customer_id, name, status FROM customers WHERE customer_id = '00012';",
+      "note": "",
+      "sha256": "2b992ffd5496c8c202a144b431d65ea445c7cb9481a44639db42d9431775cd13",
+      "lang": "",
+      "originalName": "",
+      "size": 71
+    },
+    {
+      "id": "E03",
+      "kind": "text",
+      "category": "ログ",
+      "caption": "ログイン成功ログ",
+      "step": 2,
+      "file": "E03.log",
+      "capturedAt": "2026-09-06T09:00:00+09:00",
+      "source": "app.log",
+      "note": "",
+      "sha256": "b9f7f51cfaa966968a1a3494c414a0e7014780ac3c39a3e951e3e76d6288012c",
+      "lang": "log",
+      "originalName": "",
+      "size": 88
+    }
+  ],
+  "nextEvidenceNumber": 4
+}

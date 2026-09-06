@@ -1,0 +1,12 @@
+export:
+  format: csv
+  encoding: UTF-8
+  newline: LF
+  header: true
+  columns:
+    - customer_id
+    - customer_name
+    - registered_at
+    - plan
+  endpoint: stg.example.local/api/customers/export
+  retention_days: 7

@@ -1,0 +1,60 @@
+id: TC-002
+title: ログイン異常系（パスワード誤り）
+precondition: ユーザー U001（一般権限）が有効状態で存在すること
+tester: 王
+date: 2026-09-04
+env: STG
+verdict: ""
+note: 不具合票 BUG-0123 起票済み
+steps:
+  - no: 1
+    action: ログイン画面で誤ったパスワードを入力し「ログイン」を押下
+    expected: 「ユーザーIDまたはパスワードが正しくありません」と赤字で表示される
+    actual: 英語メッセージ「Invalid credentials」が表示された
+    verdict: NG
+  - no: 2
+    action: login_failures テーブルを確認
+    expected: 1 件記録される
+    actual: 1 件
+    verdict: OK
+evidence:
+  - id: E01
+    kind: image
+    category: 画面
+    caption: エラーメッセージ表示
+    step: 1
+    file: E01.png
+    capturedAt: 2026-09-04T10:21:07+09:00
+    source: Chrome - ログイン - 顧客管理システム
+    note: 日本語メッセージが期待値、実際は英語表示
+    sha256: b6393f507d94e3c377c98ade57b26e42e330cebe2e101250b8eb804d7c9fe86d
+    lang: ""
+    originalName: ""
+    size: 27622
+  - id: E02
+    kind: text
+    category: エラー
+    caption: ブラウザコンソール
+    step: 1
+    file: E02.txt
+    capturedAt: 2026-09-04T10:21:12+09:00
+    source: DevTools Console
+    note: i18n key not found が出ていること
+    sha256: 40735ce5176b59c6824b3cdeee5fd0a5bb8f31357687f3713ad0e3f37ff6bdd1
+    lang: plain
+    originalName: ""
+    size: 309
+  - id: E03
+    kind: table
+    category: DB
+    caption: login_failures 件数
+    step: 2
+    file: E03.csv
+    capturedAt: 2026-09-04T10:22:30+09:00
+    source: SELECT user_id, failed_at, ip_address, reason FROM login_failures WHERE
+      user_id = 'U001';
+    note: 1 件だけ記録されていること
+    sha256: 30f7269383d5566d851ef306be004fb7d828cf9af6c6471c3177882322ca9d0e
+    lang: ""
+    originalName: ""
+    size: 88

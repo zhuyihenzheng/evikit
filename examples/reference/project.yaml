@@ -1,0 +1,11 @@
+name: 顧客管理システム 結合テスト
+tester: 王
+env: STG
+verdicts:
+  - OK
+  - NG
+  - 保留
+  - 対象外
+  - 未実施
+excerptLines: 30
+imageMaxWidth: 640

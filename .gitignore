@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.evikit.lock
+**/.evikit.lock
+**/.trash/
+playwright-report/
+test-results/
+examples/sample/exports/
+**/exports/
+
+# Local evidence and editable demos are never published.
+examples/sample/
+projects/
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+*.user

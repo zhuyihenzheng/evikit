@@ -1,0 +1,6 @@
+name: "evikit Desktop サンプル"
+tester: "テスト担当者"
+env: "検証環境"
+verdicts: ["OK", "NG", "保留", "対象外", "未実施"]
+excerptLines: 30
+imageMaxWidth: 640

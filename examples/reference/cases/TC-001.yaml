@@ -1,0 +1,77 @@
+id: TC-001
+title: ログイン正常系
+precondition: ユーザー U001（一般権限）が有効状態で存在すること
+tester: 王
+date: 2026-09-04
+env: STG
+verdict: OK
+note: ""
+steps:
+  - no: 1
+    action: ログイン画面を開く
+    expected: ユーザーID・パスワード欄が表示される
+    actual: 表示を確認
+    verdict: OK
+  - no: 2
+    action: 有効なユーザーでログインする
+    expected: ホーム画面と氏名が表示される
+    actual: 山田 太郎の表示を確認
+    verdict: OK
+  - no: 3
+    action: 最終ログイン日時を確認する
+    expected: users.last_login_at が操作時刻に更新される
+    actual: 更新を確認
+    verdict: OK
+evidence:
+  - id: E01
+    kind: image
+    category: 画面
+    caption: ログイン画面表示
+    step: 1
+    file: E01.png
+    capturedAt: 2026-09-04T10:12:03+09:00
+    source: Chrome - ログイン - 顧客管理システム
+    note: タイトルが「ログイン」であること
+    sha256: c026b0cce8d436225e6e1258269f491c88bbbe5eae195c18550c998f6a0c526d
+    lang: ""
+    originalName: ""
+    size: 24954
+  - id: E02
+    kind: image
+    category: 画面
+    caption: ホーム画面表示
+    step: 2
+    file: E02.png
+    capturedAt: 2026-09-04T10:12:35+09:00
+    source: Chrome - ホーム - 顧客管理システム
+    note: ヘッダーに氏名「山田 太郎」が表示されていること
+    sha256: 53f60be46e370265ebe1087cb7b8a72a949e56638f114ce57817f74a8de85d11
+    lang: ""
+    originalName: ""
+    size: 45459
+  - id: E03
+    kind: table
+    category: DB
+    caption: 最終ログイン日時の更新
+    step: 3
+    file: E03.csv
+    capturedAt: 2026-09-04T10:13:20+09:00
+    source: SELECT user_id, user_name, last_login_at FROM users WHERE user_id = 'U001';
+    note: last_login_at が操作時刻に更新されていること
+    sha256: a994d227b313b7d10f229ac1e213767895fc1a4b21182c0f6851e3cc61ae1e06
+    lang: ""
+    originalName: ""
+    size: 71
+  - id: E04
+    kind: text
+    category: ログ
+    caption: アプリケーションログ
+    step: 2
+    file: E04.log
+    capturedAt: 2026-09-04T10:14:02+09:00
+    source: app.log
+    note: login success が記録されていること
+    sha256: 3e81aa1c042eb25dee53affa48661859dd5c31fcdb6dbf755905724b2cb0b2fa
+    lang: log
+    originalName: ""
+    size: 912

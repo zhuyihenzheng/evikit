@@ -1,0 +1,6 @@
+$ file customers.csv
+customers.csv: Unicode text, UTF-8 text
+$ wc -l customers.csv
+       4 customers.csv
+$ head -1 customers.csv
+customer_id,customer_name,registered_at,plan

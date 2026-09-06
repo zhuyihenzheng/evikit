@@ -2,7 +2,7 @@
 
 把测试步骤与证据整理成 **Excel 和完整附件 ZIP** 的本地工具。支持截图、SQL 与表格数据、日志、API 响应、命令结果和配置文件。
 
-[日本語](README.md) · [Windows 下载](https://github.com/zhuyihenzheng/evikit/releases) · [原生版架构](native-windows/ARCHITECTURE.md) · [验证记录](native-windows/QA.md)
+[日本語](README.md) · [源码中的 Windows 发行版](release/) · [GitHub Releases](https://github.com/zhuyihenzheng/evikit/releases) · [原生版架构](native-windows/ARCHITECTURE.md) · [验证记录](native-windows/QA.md)
 
 目前是 **alpha**，包含两种独立界面。项目正本都是文件夹里的 YAML 和证据文件，不依赖数据库、云账号或在线服务。
 
@@ -20,10 +20,16 @@
 
 ## Windows 试用
 
-1. 在 [Releases](https://github.com/zhuyihenzheng/evikit/releases) 下载 `evikit-win-x64.zip`。
-2. 完整解压，双击 `evikit.exe`。**不要只取出 EXE，其他文件包含运行时。**
-3. 在「プロジェクトを開く…」选择随包的 `sample-project`。
-4. 编辑步骤、添加证据、保存，然后导出 Excel 和 ZIP。
+如果公司电脑只有 Git 可以访问外网，发行包已经直接放进源码仓库：
+
+```powershell
+git clone --depth 1 https://github.com/zhuyihenzheng/evikit.git
+cd evikit\release
+Expand-Archive .\evikit-win-x64.zip -DestinationPath .\evikit
+& ".\evikit\evikit-win-x64\evikit.exe"
+```
+
+也可以从 [GitHub Releases](https://github.com/zhuyihenzheng/evikit/releases) 下载同一个 `evikit-win-x64.zip`。完整解压后，在「プロジェクトを開く…」选择随包的 `sample-project`，然后编辑、保存并导出 Excel 和 ZIP。**不要只取出 EXE，其他文件包含运行时。**
 
 无需另装 Bun、.NET、WebView2。生成 Excel 也不需要安装 Excel；查看和打印生成的文件时，可以使用 Excel。
 

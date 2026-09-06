@@ -6,7 +6,7 @@ Windows のネイティブコントロールと GDI+ を使用します。Chromi
 
 ## 配布版の起動
 
-[GitHub Releases](https://github.com/zhuyihenzheng/evikit/releases) から Windows 用 ZIP を取得できます。
+[リポジトリ内の release ディレクトリ](../release/) または [GitHub Releases](https://github.com/zhuyihenzheng/evikit/releases) から Windows 用 ZIP を取得できます。Git のみ外部接続できる環境では `git clone --depth 1 https://github.com/zhuyihenzheng/evikit.git` を実行してください。
 
 1. `evikit-win-x64.zip` を Windows の書き込み可能な場所に展開します。
 2. **フォルダー内の全ファイルを保持したまま `evikit.exe` をダブルクリック**します。

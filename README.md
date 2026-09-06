@@ -2,7 +2,7 @@
 
 テストの操作・期待結果・実際結果に証拠を紐づけ、提出用の **Excel と添付 ZIP** を作るローカルツールです。スクリーンショットだけでなく、SQL と行データ、ログ、API 応答、設定ファイルを構造化して保存します。
 
-[中文说明](README.zh-CN.md) · [Windows ダウンロード](https://github.com/zhuyihenzheng/evikit/releases) · [Windows 操作ガイド](native-windows/README.md) · [アーキテクチャ](docs/05-architecture.md)
+[中文说明](README.zh-CN.md) · [Git 内の Windows 配布版](release/) · [GitHub Releases](https://github.com/zhuyihenzheng/evikit/releases) · [Windows 操作ガイド](native-windows/README.md) · [アーキテクチャ](docs/05-architecture.md)
 
 **現在は alpha です。** ブラウザ版と、ブラウザを使わない Windows 原生デスクトップ版があります。Windows 版はビルドとデータ・出力検証まで完了し、Windows 実機の画面・RDP 操作は未検証です。
 
@@ -21,10 +21,16 @@
 
 ## Windows で試す
 
-1. [Releases](https://github.com/zhuyihenzheng/evikit/releases) のプレビュー版から **`evikit-win-x64.zip`** をダウンロードします。
-2. ZIP を展開し、フォルダー内の **`evikit.exe`** をダブルクリックします。
-3. 「プロジェクトを開く…」で同梱の **`sample-project`** を開きます。
-4. ステップ・証拠を編集し、「成果物を出力」で Excel と ZIP を作ります。
+会社 PC で Git のみ外部接続できる場合は、配布 ZIP もリポジトリに含まれているため、次のコマンドだけで取得できます。
+
+```powershell
+git clone --depth 1 https://github.com/zhuyihenzheng/evikit.git
+cd evikit\release
+Expand-Archive .\evikit-win-x64.zip -DestinationPath .\evikit
+& ".\evikit\evikit-win-x64\evikit.exe"
+```
+
+または [GitHub Releases](https://github.com/zhuyihenzheng/evikit/releases) から同じ ZIP をダウンロードできます。起動後は「プロジェクトを開く…」で同梱の `sample-project` を開き、ステップ・証拠を編集して「成果物を出力」を選びます。
 
 **EXE だけを取り出さず、展開したフォルダー全体を保持してください。** Bun / .NET / WebView2 / Excel 本体の追加インストールは不要です。Excel 本体は、生成した Excel を閲覧・印刷する場合に使用します。
 

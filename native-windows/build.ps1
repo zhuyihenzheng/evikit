@@ -17,7 +17,7 @@ try {
     $target = Join-Path $PSScriptRoot "artifacts/evikit-$Runtime"
     dotnet publish src/Evikit.Windows -c Release -r $Runtime --self-contained true -p:PublishSingleFile=false -p:DebugType=None -o $target
     if ($LASTEXITCODE -ne 0) { throw 'Windows publish failed.' }
-    Copy-Item README.md, THIRD-PARTY-NOTICES.md, WINDOWS-ACCEPTANCE.md, QA.md -Destination $target
+    Copy-Item README.md, THIRD-PARTY-NOTICES.md, WINDOWS-ACCEPTANCE.md, QA.md, CAPTURE-DESIGN.md -Destination $target
     Copy-Item licenses -Destination $target -Recurse -Force
     if (-not (Test-Path (Join-Path $target "sample-project"))) { Copy-Item examples/demo -Destination (Join-Path $target "sample-project") -Recurse }
     if (-not (Test-Path (Join-Path $target 'evikit.exe'))) { throw 'evikit.exe missing.' }

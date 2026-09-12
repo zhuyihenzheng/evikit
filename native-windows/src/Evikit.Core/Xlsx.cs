@@ -71,6 +71,7 @@ public static class Xlsx
                 double height = Math.Max(42, new[] { step.Action, step.Expected, step.Actual }.Max(t => Math.Ceiling(t.Length / 20.0) + t.Count(ch => ch == '\n')) * 15 + 12);
                 sheet.Add(height, 0, step.No.ToString(), step.Action, step.Expected, step.Actual, step.Verdict, string.Join(", ", c.Evidence.Where(e => e.Step == step.No).Select(e => e.Id)));
                 sheet.Rows[^1].Elements(S + "c").ElementAt(4).SetAttributeValue("s", VerdictStyle(step.Verdict));
+                if (!string.IsNullOrEmpty(step.Condition)) sheet.Full($"ステップ {step.No} / テスト条件：\n{step.Condition}");
             }
             foreach (var evidence in item.Evidence)
             {
@@ -98,8 +99,10 @@ public static class Xlsx
                     for (int i = 0; i < Math.Min(lines.Length, snapshot.Project.ExcerptLines); i++) sheet.Full($"{i + 1,4}  {lines[i]}");
                     if (lines.Length > snapshot.Project.ExcerptLines) sheet.Full($"… 全 {lines.Length} 行。全文は添付ファイルを参照。");
                 }
+                bool video = e.Kind == "file" && Media.IsVideo(e.File);
+                if (video) sheet.Full($"動画 / {Path.GetExtension(e.File).TrimStart('.').ToUpperInvariant()} / {e.Size / 1048576d:N1} MiB — 下のリンクからローカルプレーヤーで開く");
                 if (e.Note != "") sheet.Full("確認事項：" + e.Note);
-                int linkRow = sheet.Row("", "証拠ファイル：" + (e.OriginalName == "" ? e.File : e.OriginalName));
+                int linkRow = sheet.Row("", (video ? "動画を開く：" : "証拠ファイル：") + (e.OriginalName == "" ? e.File : e.OriginalName));
                 sheet.Links.Add(($"B{linkRow}", "files/" + Uri.EscapeDataString(c.Id) + "/" + Uri.EscapeDataString(e.File), false));
             }
             sheet.Full("備考：" + c.Note);

@@ -13,6 +13,7 @@ internal sealed class EvidenceDialog : Form
     private readonly Label filename = new() { AutoSize = true, Padding = new(6) };
     private byte[]? bytes;
     private string extension = "txt", originalName = "";
+    private string? sourcePath;
     private readonly List<int?> stepNumbers = [null];
     private readonly bool metadataOnly;
     private readonly Evidence? metadata;
@@ -44,18 +45,29 @@ internal sealed class EvidenceDialog : Form
     private void Choose() { using var d = new OpenFileDialog { Title = "証拠ファイルを選択" }; if (d.ShowDialog(this) == DialogResult.OK) LoadFile(d.FileName); }
     private void LoadFile(string path)
     {
-        if (new FileInfo(path).Length > 25 * 1024 * 1024) throw new InvalidDataException("証拠は 25 MiB 以下にしてください。");
-        var detected = Inputs.Detect(path); kind.SelectedItem = detected.Kind; category.SelectedItem = detected.Category; lang.SelectedItem = detected.Lang;
-        bytes = File.ReadAllBytes(path); originalName = Path.GetFileName(path); extension = Path.GetExtension(path).TrimStart('.'); if (extension == "") extension = "bin";
-        caption.Text = Path.GetFileNameWithoutExtension(path); filename.Text = originalName;
-        if (detected.Kind is "table" or "text") content.Text = Inputs.Utf8(bytes);
-        if (detected.Kind == "image") { using var image = Ui.Decode(bytes); }
+        var detected = Inputs.Detect(path);
+        long size = new FileInfo(path).Length, maximum = detected.Kind == "file" ? Media.MaxFileBytes : Media.MaxInlineBytes;
+        if (size > maximum) throw new InvalidDataException($"この種類の証拠は {maximum / 1048576:N0} MiB 以下にしてください。");
+        kind.SelectedItem = detected.Kind; category.SelectedItem = detected.Category; lang.SelectedItem = detected.Lang;
+        sourcePath = detected.Kind == "file" ? Path.GetFullPath(path) : null;
+        bytes = detected.Kind == "file" ? null : File.ReadAllBytes(path);
+        originalName = Path.GetFileName(path); extension = Path.GetExtension(path).TrimStart('.'); if (extension == "") extension = "bin";
+        caption.Text = Path.GetFileNameWithoutExtension(path); filename.Text = $"{originalName} ({size / 1048576d:N1} MiB)"; content.Clear();
+        if (Media.IsVideo(path)) note.PlaceholderText = "例：00:35 エラー表示 / 01:12 再試行で成功";
+        if (detected.Kind is "table" or "text") content.Text = Inputs.Utf8(bytes!);
+        if (detected.Kind == "image") { using var image = Ui.Decode(bytes!); }
+    }
+    internal void SetVideoFrame(Evidence video, string timestamp)
+    {
+        step.SelectedIndex = Math.Max(0, stepNumbers.IndexOf(video.Step));
+        source.Text = $"動画 {video.Id} ({video.OriginalName}) / {timestamp}";
+        caption.Text = $"動画 {video.Id}：{timestamp}";
     }
     private void PasteImage()
     {
         using var image = Clipboard.GetImage(); if (image == null) throw new InvalidDataException("クリップボードに画像がありません。");
         if ((long)image.Width * image.Height > 80_000_000) throw new InvalidDataException("画像が大きすぎます。");
-        bytes = Ui.Png(image); extension = "png"; kind.SelectedItem = "image"; category.SelectedItem = "画面"; filename.Text = "clipboard.png";
+        bytes = Ui.Png(image); sourcePath = null; originalName = "clipboard.png"; extension = "png"; kind.SelectedItem = "image"; category.SelectedItem = "画面"; filename.Text = "clipboard.png";
     }
     private void Save()
     {
@@ -66,6 +78,11 @@ internal sealed class EvidenceDialog : Form
             Metadata = e; DialogResult = DialogResult.OK; return;
         }
         byte[] data;
+        if (k == "file" && sourcePath != null)
+        {
+            Result = new(k, cat, caption.Text, stepNumbers[step.SelectedIndex], source.Text, note.Text, "", [], extension, originalName, sourcePath);
+            DialogResult = DialogResult.OK; return;
+        }
         if (k is "text" or "table") { data = Encoding.UTF8.GetBytes(content.Text); extension = k == "table" ? "csv" : "txt"; if (k == "table") _ = Tables.Parse(content.Text); }
         else { data = bytes ?? throw new InvalidDataException("ファイルまたは画像を選択してください。"); if (k == "image") { using var image = Ui.Decode(data); extension = Xlsx.ImageSize(data).Extension; } }
         Result = new(k, cat, caption.Text, stepNumbers[step.SelectedIndex], source.Text, note.Text, (string)lang.SelectedItem!, data, extension, originalName); DialogResult = DialogResult.OK;

@@ -12,6 +12,11 @@ import { EvidenceSchema, TestCaseSchema } from "../src/core/types";
 const SAMPLE = join(import.meta.dir, "..", "examples", "reference");
 
 describe("schema", () => {
+  test("optional native step conditions preserve multiline text without changing old steps", () => {
+    const parsed = TestCaseSchema.parse({ id: "TC-001", steps: [{ no: 1 }, { no: 2, condition: "権限：管理者\nID：00012" }] });
+    expect(parsed.steps[0]).not.toHaveProperty("condition");
+    expect(parsed.steps[1]!.condition).toBe("権限：管理者\nID：00012");
+  });
   test("サンプルの project.yaml が読める", () => {
     const project = loadProject(SAMPLE);
     expect(project.name).toBe("顧客管理システム 結合テスト");

@@ -15,10 +15,13 @@ Evikit.Windows（仅 Windows）
   MainForm          原生表单、DataGridView、文件夹、剪贴板、草稿状态
   EvidenceDialog    四类录入与元数据
   AnnotationForm    GDI+ 注释、原图坐标、PNG 生成
+  CaptureSessionForm / ScreenCapture  内置连续截图、全局快捷键、固定区域
+  ImageReviewForm   缩略图、批量说明 / 步骤、排序、标注
         ↓ 直接方法调用
 Evikit.Core（可在 Mac 测试）
   Models / Contract 数据契约、验证、判定
   Workspace         项目锁、revision、原子保存、证据哈希、恢复、快照
+  CaptureInbox      PNG + YAML 提交间的持久化回收记录
   Tables            UTF-8 CSV/TSV，字符串保真
   Xlsx              标准 ZIP/XML OOXML 写入器
   Export            附件、manifest、ZIP、完整目录发布
@@ -34,7 +37,9 @@ YamlDotNet 是唯一直接运行时 NuGet 依赖。Excel 写入器采用 .NET �
 
 证据先写独立文件，再替换 YAML 引用。失败可能留下无引用文件，不覆盖原图。证据元数据保存不会重新认可一个被篡改的哈希。导出和原图编辑会核对已有哈希；旧数据缺少哈希时只能检查存在性，不能追溯证明其未被修改。
 
-快照读取全部元数据和证据，再复核 YAML revision。输出在暂存目录生成，全部成功后改名为完成目录，失败不发布残缺交付物。外部程序在读取期间修改证据仍是文件系统级边界；有已有哈希的证据会被校验，无哈希旧证据无同等保障。
+桌面 UI 导出调用 `Export.Deliver(workspace, outputRoot)`：在暂存目录分段复制全部附件并计算哈希，构造只含元数据与图片 / 表格 / 文本字节的快照，file 附件不进入内存快照；最后复核 YAML revision。基于这些已复制的数据生成 Excel 和 ZIP，全部成功后改名为完成目录。失败不发布残缺交付物。旧的小文件测试接口 `Snapshot()` 和 `Export.Deliver(snapshot, ...)` 仍保留，不用于大视频。
+
+`Media` 通过扩展名识别视频，仍使用 file 证据和「画面」分类。文件路径导入通过 `NewEvidence.SourcePath`（仅调用参数，不写入 YAML），单个 file 上限 2 GiB，按 1 MiB 缓冲复制到唯一文件名；图片维持 25 MiB。SHA-256 校验、文件提取、删除恢复也不整段读取视频。视频 ZIP 条目不做重复压缩。确认画面是普通 image，在 source 文本中记录视频 ID 和时间点，不扩展数据契约。
 
 ## 与浏览器版不同的地方
 
@@ -43,3 +48,7 @@ YamlDotNet 是唯一直接运行时 NuGet 依赖。Excel 写入器采用 .NET �
 PNG/JPEG/GIF/BMP 图像可显示和注释；WebP 不支持。导入图像保留原始字节，标注另存 PNG。表格支持 CSV/TSV，不实现终端表格或 Shift-JIS 自动识别。证据恢复记录独立存放 `.trash/native-*/evidence.json`，当前界面仅支持恢复本会话最后一次删除。
 
 没有用例删除、批次运行历史、蒙版、SQL 执行、API 调用、云同步或自动更新。真实 Windows 界面与 RDP 测试尚未完成，详见 WINDOWS-ACCEPTANCE.md。
+
+alpha 0.2 的连续截图流程、恢复策略和实现边界见 [CAPTURE-DESIGN.md](CAPTURE-DESIGN.md)。项目 YAML 不新增字段；多张图继续作为独立 image 证据关联到同一步骤。批量整理保持非图片证据和全部图片原始信息。
+
+截图本身不改数据契约。后续新增的测试条件使用 Step 可选字段 `condition`；空项目保持兼容，条件随 Step 对象一起保存、排序、删除。Windows UI 新增条件列和多行编辑，Excel 在该步骤主行下方插入跨列条件行，保持原有 6 列宽度、判定位置和图片锚点。共享 TypeScript schema 只做保留 condition 的数据兼容，浏览器界面与导出暂不显示条件。含条件的项目需要新版数据读取器，旧客户端会拒绝未知字段。

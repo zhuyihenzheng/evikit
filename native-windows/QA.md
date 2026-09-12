@@ -1,4 +1,37 @@
-# 验证记录 — Windows 原生版 alpha 0.1
+# 验证记录 — Windows 原生版
+
+## alpha 0.2 视频与发行准备，2026-09-12
+
+- **46 项 Core 检查通过**：前面的 38 项，加视频识别、64 MiB 分段导入、大小 / 文件不存在 / revision 拒绝、删除恢复、混合图片视频交付、相对链接、哈希不符拒绝等 8 项。
+- 64 MiB 合成视频附件的导入累计托管分配约 **1.14 MiB**，导出约 **5.59 MiB**（`GC.GetTotalAllocatedBytes` 差值；不是进程 RSS 或峰值内存）。测试断言分别低于 32 MiB，验证没有把整个视频装入字节数组。
+- Excel 和 ZIP 检查涵盖视频原字节、SHA-256、确认图片、`00:35` 时间点说明和相对文件链接；无 OLE、宏和 HTML。
+- 单个 file 上限 2 GiB；超限测试使用稀疏文件验证提前拒绝。没有完成真实 2 GiB 视频的整段性能测试。64 MiB 合成载荷不是可播放的视频，未测试解码。
+- 客户端代码可交叉编译。播放器选择与启动、Windows 真实窗口 / RDP / Excel 点击仍需实机验证。
+- 本版发行标识为 `v0.2.0-native-alpha`，标准包名 `evikit-win-x64.zip`，同步到仓库 `release/`。alpha 0.1 历史 release 保留。
+
+视频读取和交付改动仅作用于客户端。随后增加了 Step 的可选 `condition` 字段、客户端输入列和多行编辑框、步骤下方的 Excel 条件行；新增 2 项 Core 验证（总计 48 项）。旧项目不需要条件字段。共享 TypeScript 数据契约增加 condition，另加 2 项保留条件的读写测试（浏览器检查总计 77 项）；浏览器界面和导出器未改，条件的编辑与导出使用客户端。
+
+## alpha 0.2 连续截图，2026-09-11
+
+此次改动仅位于 `native-windows/`，未改浏览器实现或用户项目。客户端现在提供内置范围截图、重复上次区域、自动保存与编号、待保存图片回收、缩略图集中整理、批量说明 / 步骤分配、图片排序。
+
+| 检查 | 结果 |
+| --- | --- |
+| .NET SDK 10.0.401（Mac ARM64） | Microsoft 下载文件 SHA-512 验证通过 |
+| Core 检查 | 38 项通过，包含原有 28 项和截图 / 整理新增 10 项 |
+| Windows Forms Release 构建 | 成功，0 warning / 0 error |
+| Windows x64 self-contained 发布 | 成功，含 .NET / Windows Desktop 10.0.12 运行时 |
+| 连续追加与 Excel 输出 | 合成 PNG 连续保存 64 次，全部图片及顺序通过断言，Open XML 格式检查通过 |
+| 独立 ExcelJS 回读 / 浏览器数据契约读取 | 2 cases、3 sheets、64 images、1,288 个字符串单元格，00012 保留，无 HTML |
+| 保存失败与两个中断点 | PNG 已写未写 YAML、YAML 已写未清理回收记录，均可重试且不重复添加 |
+| 原图与删除恢复 | 标注后重试保留原图和说明；已主动删除的图片不会被遗留回收记录重新添加 |
+| 集中整理 | 保留 ID / 原图 / 哈希 / 采集时间 / 非图片证据，拒绝过期 revision、无效步骤、缺失或重复图片 |
+
+64 张图片测试使用 1×1 合成 PNG 验证数据完整性和导出顺序，不代表 64 张真实大截图的性能或屏幕捕获实测。此次未运行真实 Windows Forms 界面，未触发 Windows 全局快捷键，也未在 AWS RDP 内截图。Windows 布局、DPI、多屏、取消选择、按键冲突、暂停恢复、真实图片和 Excel 渲染仍在 `WINDOWS-ACCEPTANCE.md` 中明确列为未确认。
+
+本地试用包为 `artifacts/evikit-win-x64-capture-alpha.zip`，版本 0.2.0。GitHub 已有的 alpha 0.1 包没有被本次替换。实现方案见 `CAPTURE-DESIGN.md`。
+
+## alpha 0.1 历史记录
 
 2026-09-06。原生版源码和输出均位于 `native-windows/`。原生开发验收阶段没有修改浏览器版或用户项目。GitHub 整理阶段另加固定的 `examples/reference` 与示例复制脚本；用户正在编辑的 `examples/sample` 保留在本地且不提交。
 
@@ -37,4 +70,4 @@
 
 尚需 Windows 验证：双击启动、真实窗口布局、IME、RDP 剪贴板 / 拖拽、DPI、多显示器、图片注释绘制与裁剪、实际 Excel 的打印缩放与超链接、公司允许列表和离线环境执行。完整清单见 `WINDOWS-ACCEPTANCE.md`。
 
-WebP、用例删除、恢复列表、Runs、遮罩、Shift-JIS、自动采集、自动更新、签名和安装器尚未实现。
+当时尚未实现 WebP、用例删除、恢复列表、Runs、遮罩、Shift-JIS、自动采集、自动更新、签名和安装器。alpha 0.2 已加入内置连续截图，其他限制仍见 README。

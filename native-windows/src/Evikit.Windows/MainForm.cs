@@ -21,13 +21,14 @@ internal sealed class MainForm : Form
     private readonly TabControl tabs = new() { Dock = DockStyle.Fill };
     private readonly ToolStripStatusLabel status = new("プロジェクトを開く、または新規作成してください。"), dirtyLabel = new();
     private string? archive;
+    private string? videoPlayer;
     private List<CaseDocument> caseList = [];
     private sealed record CaseItem(string Id, string Label);
 
     public MainForm(string? initialPath)
     {
         Text = "evikit Desktop — テスト証拠ワークスペース"; Font = SystemFonts.MessageBoxFont; BackColor = Ui.Background; StartPosition = FormStartPosition.CenterScreen; ClientSize = new(1280, 850); MinimumSize = new(1000, 700); AutoScaleMode = AutoScaleMode.Dpi; KeyPreview = true;
-        var bar = Ui.Bar(Ui.Button("プロジェクトを開く…", OpenProject), Ui.Button("新規プロジェクト…", CreateProject), Ui.Button("プロジェクト設定", ProjectSettings), Ui.Button("保存  Ctrl+S", Save, true), Ui.Button("再読込", Reload), Ui.Button("成果物を出力", () => _ = ExportAsync(), true));
+        var bar = Ui.Bar(Ui.Button("プロジェクトを開く…", OpenProject), Ui.Button("新規プロジェクト…", CreateProject), Ui.Button("プロジェクト設定", ProjectSettings), Ui.Button("保存  Ctrl+S", Save, true), Ui.Button("再読込", Reload), Ui.Button("連続スクリーンショット", StartCapture, true), Ui.Button("成果物を出力", () => _ = ExportAsync(), true));
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, ColumnStyles = { new(SizeType.Absolute, 265), new(SizeType.Percent, 100) }, Padding = new(8) };
         var sidebar = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new(8) };
         var filter = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 }; filter.Controls.Add(projectLabel); search.PlaceholderText = "ID・タイトルで検索"; filter.Controls.Add(search); filter.Controls.Add(ngOnly);
@@ -37,12 +38,12 @@ internal sealed class MainForm : Form
         layout.Controls.Add(sidebar, 0, 0); layout.Controls.Add(editor, 1, 0);
         var basic = new TabPage("用例の情報") { BackColor = Color.White }; var fields = Ui.Fields();
         Ui.Field(fields, "タイトル", title); Ui.Field(fields, "担当者", tester); Ui.Field(fields, "日付", date); Ui.Field(fields, "環境", env); Ui.Field(fields, "判定（空欄＝自動）", verdict, 48); Ui.Field(fields, "前提条件", precondition, 120); Ui.Field(fields, "備考", note, 150); basic.Controls.Add(fields);
-        var stepPage = new TabPage("テストステップ"); Ui.Column(steps, "No.", "No", 28, true); Ui.Column(steps, "操作", "Action", 170); Ui.Column(steps, "期待結果", "Expected", 150); Ui.Column(steps, "実際結果", "Actual", 150); Ui.Column(steps, "判定", "Verdict", 60);
-        stepPage.Controls.Add(steps); stepPage.Controls.Add(Ui.Bar(Ui.Button("＋ ステップ", AddStep), Ui.Button("削除", DeleteStep), Ui.Button("↑", () => MoveStep(-1)), Ui.Button("↓", () => MoveStep(1))));
+        var stepPage = new TabPage("テストステップ"); Ui.Column(steps, "No.", "No", 28, true); Ui.Column(steps, "操作", "Action", 170); Ui.Column(steps, "テスト条件", "Condition", 150); Ui.Column(steps, "期待結果", "Expected", 150); Ui.Column(steps, "実際結果", "Actual", 150); Ui.Column(steps, "判定", "Verdict", 60);
+        stepPage.Controls.Add(steps); stepPage.Controls.Add(Ui.Bar(Ui.Button("＋ ステップ", AddStep), Ui.Button("テスト条件…", EditStepCondition), Ui.Button("削除", DeleteStep), Ui.Button("↑", () => MoveStep(-1)), Ui.Button("↓", () => MoveStep(1))));
         var evidencePage = new TabPage("証拠・プレビュー");
         Ui.Column(evidence, "ID", "Id", 35); Ui.Column(evidence, "種類", "Kind", 45); Ui.Column(evidence, "分類", "Category", 45); Ui.Column(evidence, "見出し", "Caption", 150); Ui.Column(evidence, "Step", "Step", 35);
         var split = new SplitContainer { Dock = DockStyle.Fill, Size = new(800, 600), Orientation = Orientation.Horizontal, SplitterDistance = 200, Panel1MinSize = 100, Panel2MinSize = 140 }; split.Panel1.Controls.Add(evidence); split.Panel2.Controls.Add(preview);
-        var evidenceBar = Ui.Bar(Ui.Button("＋ 証拠", () => AddEvidence()), Ui.Button("貼り付け", PasteEvidence), Ui.Button("情報編集", EditEvidence), Ui.Button("画像に注釈", Annotate), Ui.Button("原図に戻す", ResetImage), Ui.Button("削除", DeleteEvidence), Ui.Button("削除を復元", RestoreEvidence), Ui.Button("証拠を保存…", SaveEvidence));
+        var evidenceBar = Ui.Bar(Ui.Button("＋ 証拠", () => AddEvidence()), Ui.Button("＋ 動画", AddVideo), Ui.Button("動画を開く", () => _ = OpenVideoAsync()), Ui.Button("動画の確認画像", AddVideoFrame), Ui.Button("貼り付け", PasteEvidence), Ui.Button("画像をまとめて整理", ReviewImages), Ui.Button("情報編集", EditEvidence), Ui.Button("画像に注釈", Annotate), Ui.Button("原図に戻す", ResetImage), Ui.Button("削除", DeleteEvidence), Ui.Button("削除を復元", () => _ = RestoreEvidenceAsync()), Ui.Button("証拠を保存…", () => _ = SaveEvidenceAsync()));
         evidencePage.Controls.Add(split); evidencePage.Controls.Add(evidenceBar);
         tabs.TabPages.AddRange([basic, stepPage, evidencePage]); tabs.Enabled = false;
         var statusBar = new StatusStrip(); status.Spring = true; status.TextAlign = ContentAlignment.MiddleLeft; statusBar.Items.AddRange([status, dirtyLabel]);
@@ -53,9 +54,9 @@ internal sealed class MainForm : Form
         steps.DataError += (_, e) => { e.ThrowException = false; status.Text = "ステップの入力内容を確認してください。"; };
         evidence.SelectionChanged += (_, _) => { if (!loading) Ui.Guard(PreviewEvidence); };
         AllowDrop = true; DragEnter += (_, e) => e.Effect = e.Data?.GetDataPresent(DataFormats.FileDrop) == true ? DragDropEffects.Copy : DragDropEffects.None;
-        DragDrop += (_, e) => Ui.Guard(() => { if (e.Data?.GetData(DataFormats.FileDrop) is string[] files) foreach (var file in files) { if (Directory.Exists(file)) continue; AddEvidence(file); } });
+        DragDrop += async (_, e) => { if (e.Data?.GetData(DataFormats.FileDrop) is string[] files) foreach (var file in files) { if (Directory.Exists(file)) continue; await AddEvidenceAsync(file); } };
         KeyDown += (_, e) => { if (e.Control && e.KeyCode == Keys.S) { e.SuppressKeyPress = true; Ui.Guard(Save); } else if (e.Control && e.Shift && e.KeyCode == Keys.V) { e.SuppressKeyPress = true; Ui.Guard(PasteEvidence); } };
-        FormClosing += (_, e) => { if (exporting) { e.Cancel = true; status.Text = "出力が完了するまでお待ちください。"; return; } try { if (!ResolveDraft()) e.Cancel = true; } catch (Exception ex) { e.Cancel = true; MessageBox.Show(this, ex.Message); } if (!e.Cancel) workspace?.Dispose(); };
+        FormClosing += (_, e) => { if (exporting) { e.Cancel = true; status.Text = "保存・検証・出力が完了するまでお待ちください。"; return; } try { if (!ResolveDraft()) e.Cancel = true; } catch (Exception ex) { e.Cancel = true; MessageBox.Show(this, ex.Message); } if (!e.Cancel) workspace?.Dispose(); };
         Shown += (_, _) => { if (initialPath != null) Ui.Guard(() => LoadProject(initialPath)); };
     }
     private void NeedCase() { if (current == null || workspace == null) throw new InvalidOperationException("用例を選択してください。"); }
@@ -160,6 +161,19 @@ internal sealed class MainForm : Form
         NeedCase(); CaptureDraft(); current!.Data.Steps.Add(new Step { No = current.Data.Steps.Select(s => s.No).DefaultIfEmpty(0).Max() + 1 });
         ((BindingList<Step>)steps.DataSource!).ResetBindings(); MarkDirty(); steps.CurrentCell = steps.Rows[^1].Cells[1];
     }
+    private void EditStepCondition()
+    {
+        NeedCase(); if (steps.CurrentRow?.DataBoundItem is not Step selected) throw new InvalidOperationException("ステップを選択してください。");
+        CaptureDraft();
+        using var dialog = new Form { Text = $"Step {selected.No} — テスト条件", Font = Font, ClientSize = new(600, 300), StartPosition = FormStartPosition.CenterParent };
+        var input = Ui.Text(selected.Condition ?? "", true); input.PlaceholderText = "例：権限＝管理者\r\n顧客 ID＝00012\r\n登録前の状態＝未登録";
+        var fields = Ui.Fields(); Ui.Field(fields, "テスト条件", input, 225);
+        var bar = Ui.Bar(Ui.Button("反映", () => dialog.DialogResult = DialogResult.OK, true), Ui.Button("キャンセル", () => dialog.DialogResult = DialogResult.Cancel));
+        bar.Dock = DockStyle.Bottom; dialog.Controls.Add(fields); dialog.Controls.Add(bar);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        selected.Condition = string.IsNullOrEmpty(input.Text) ? null : input.Text;
+        ((BindingList<Step>)steps.DataSource!).ResetBindings(); MarkDirty();
+    }
     private void DeleteStep()
     {
         NeedCase(); if (steps.CurrentRow?.DataBoundItem is not Step s) return;
@@ -181,16 +195,95 @@ internal sealed class MainForm : Form
     }
     private Evidence SelectedEvidence() { NeedCase(); return evidence.CurrentRow?.DataBoundItem as Evidence ?? throw new InvalidOperationException("証拠を選択してください。"); }
     private void AddEvidence(string? file = null, byte[]? image = null, string? text = null)
+        => _ = AddEvidenceAsync(file, image, text);
+    private async Task AddEvidenceAsync(string? file = null, byte[]? image = null, string? text = null, Evidence? video = null, string timestamp = "")
     {
-        NeedCase(); Save(); using var d = new EvidenceDialog(current!.Data, file: file, clipboardImage: image, clipboardText: text);
+        if (exporting) return;
+        try
+        {
+            NeedCase(); Save(); using var d = new EvidenceDialog(current!.Data, file: file, clipboardImage: image, clipboardText: text);
+            if (video != null) d.SetVideoFrame(video, timestamp);
+            if (d.ShowDialog(this) != DialogResult.OK) return;
+            var doc = current; var input = d.Result!;
+            if (video != null && input.Kind != "image") throw new InvalidDataException("動画の確認画像には image を選択してください。");
+            var saved = await RunStorageAsync(() => workspace!.AddEvidence(doc!, input), "証拠をコピー・検証しています…");
+            LoadCase(saved); tabs.SelectedIndex = 2; evidence.CurrentCell = evidence.Rows[^1].Cells[0];
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "証拠を追加できませんでした", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+    }
+    private async Task<T> RunStorageAsync<T>(Func<T> action, string message)
+    {
+        if (exporting) throw new InvalidOperationException("現在の処理が完了するまでお待ちください。");
+        exporting = true; Enabled = false; UseWaitCursor = true; status.Text = message;
+        try { var result = await Task.Run(action); status.Text = "完了しました。"; return result; }
+        finally { exporting = false; Enabled = true; UseWaitCursor = false; }
+    }
+    private void AddVideo()
+    {
+        NeedCase(); using var d = new OpenFileDialog { Title = "動画を追加（最大 2 GiB）", Filter = "動画|*.mp4;*.mov;*.avi;*.wmv;*.mkv;*.webm;*.m4v" };
+        if (d.ShowDialog(this) == DialogResult.OK) AddEvidence(d.FileName);
+    }
+    private Evidence SelectedVideo()
+    {
+        var video = SelectedEvidence();
+        if (video.Kind != "file" || !Media.IsVideo(video.File)) throw new InvalidOperationException("動画の証拠を選択してください。");
+        return video;
+    }
+    private async Task OpenVideoAsync()
+    {
+        if (exporting) return;
+        try
+        {
+            var video = SelectedVideo(); Save(); string caseId = current!.Data.Id;
+            if (videoPlayer == null || !File.Exists(videoPlayer))
+            {
+                using var picker = new OpenFileDialog { Title = "会社で許可されたローカル動画プレーヤーを選択（実行ファイル）", Filter = "プレーヤー|*.exe" };
+                if (picker.ShowDialog(this) != DialogResult.OK) return;
+                if (!Path.GetExtension(picker.FileName).Equals(".exe", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("プレーヤーの .exe を選択してください。");
+                videoPlayer = Path.GetFullPath(picker.FileName);
+            }
+            string path = await RunStorageAsync(() => { workspace!.VerifyEvidence(caseId, video); return workspace.EvidencePath(caseId, video); }, "動画の SHA-256 を検証しています…");
+            // Launch the explicitly chosen player with a separate argument, never a browser association or shell command.
+            Process.Start(new ProcessStartInfo(videoPlayer) { UseShellExecute = false, ArgumentList = { path } });
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message + "\n対応するローカルプレーヤーが必要です。", "動画を開けませんでした"); }
+    }
+    private void AddVideoFrame()
+    {
+        var video = Contract.Clone(SelectedVideo());
+        using var d = new OpenFileDialog { Title = "動画の確認画像を選択（再生画面のスクリーンショット）", Filter = "画像|*.png;*.jpg;*.jpeg;*.bmp;*.gif" };
         if (d.ShowDialog(this) != DialogResult.OK) return;
-        LoadCase(workspace!.AddEvidence(current, d.Result!)); tabs.SelectedIndex = 2; evidence.CurrentCell = evidence.Rows[^1].Cells[0];
+        string? time = Ui.Prompt(this, "動画の確認位置", "時間（例 00:35）", "00:00"); if (time == null) return;
+        _ = AddEvidenceAsync(d.FileName, video: video, timestamp: time);
     }
     private void PasteEvidence()
     {
         NeedCase(); if (Clipboard.ContainsImage()) { using var image = Clipboard.GetImage(); if (image != null) { if ((long)image.Width * image.Height > 80_000_000) throw new InvalidDataException("画像が大きすぎます。"); AddEvidence(image: Ui.Png(image)); } }
         else if (Clipboard.ContainsText()) AddEvidence(text: Clipboard.GetText());
         else throw new InvalidOperationException("クリップボードに画像・テキストがありません。");
+    }
+    private void StartCapture()
+    {
+        NeedCase();
+        int? selectedStep = tabs.SelectedIndex == 1 && steps.CurrentRow?.DataBoundItem is Step s ? s.No : null;
+        Save();
+        using var session = new CaptureSessionForm(workspace!, current!, selectedStep);
+        // A modal session fixes the project/case; hide the main window before any screenshot.
+        Hide();
+        try { session.ShowDialog(); }
+        finally
+        {
+            Show(); Activate(); LoadCase(workspace!.LoadCase(current!.Data.Id));
+            caseList = workspace.ListCases(); FilterCases(); tabs.SelectedIndex = 2;
+        }
+        if (current!.Data.Evidence.Any(e => e.Kind == "image")) ReviewImages();
+    }
+    private void ReviewImages()
+    {
+        NeedCase(); Save();
+        using var review = new ImageReviewForm(workspace!, current!);
+        try { review.ShowDialog(this); }
+        finally { LoadCase(workspace!.LoadCase(current!.Data.Id)); tabs.SelectedIndex = 2; }
     }
     private void EditEvidence()
     {
@@ -215,9 +308,16 @@ internal sealed class MainForm : Form
         if (MessageBox.Show(this, id + " を削除しますか？ファイルは保持され、復元できます。", "証拠を削除", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
         Save(); var result = workspace!.DeleteEvidence(current!, id); archive = result.ArchiveId; LoadCase(result.Document); status.Text = "削除しました。「削除を復元」で元に戻せます。";
     }
-    private void RestoreEvidence()
+    private async Task RestoreEvidenceAsync()
     {
-        NeedCase(); if (archive == null) throw new InvalidOperationException("このセッションで削除した証拠はありません。"); Save(); var restored = workspace!.RestoreEvidence(archive); archive = null; LoadCase(restored); caseList = workspace.ListCases(); FilterCases();
+        if (exporting) return;
+        try
+        {
+            NeedCase(); if (archive == null) throw new InvalidOperationException("このセッションで削除した証拠はありません。"); Save(); string id = archive;
+            var restored = await RunStorageAsync(() => workspace!.RestoreEvidence(id), "証拠を検証・復元しています…");
+            archive = null; LoadCase(restored); caseList = workspace!.ListCases(); FilterCases();
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "復元できませんでした"); }
     }
     private void DisposePreview()
     {
@@ -228,6 +328,18 @@ internal sealed class MainForm : Form
         DisposePreview(); if (current == null || workspace == null || evidence.CurrentRow?.DataBoundItem is not Evidence e) return;
         try
         {
+            if (e.Kind == "file")
+            {
+                string path = workspace.EvidencePath(current.Data.Id, e); long size = new FileInfo(path).Length;
+                bool video = Media.IsVideo(e.File);
+                if (video)
+                {
+                    var options = Ui.Bar(Ui.Button("プレーヤーを変更", () => { videoPlayer = null; status.Text = "次回「動画を開く」でプレーヤーを選択してください。"; }));
+                    options.Dock = DockStyle.Bottom; preview.Controls.Add(options);
+                }
+                preview.Controls.Add(new Label { Text = $"{(video ? "動画" : "添付ファイル")}  {e.Id}\n\n{e.Caption}\n{e.OriginalName}\n{size / 1048576d:N1} MiB\n\n確認事項：{e.Note}\n\n" + (video ? "「動画を開く」でローカルプレーヤーを起動します。\n「動画の確認画像」で時間点付きのスクリーンショットを追加できます。\nExcel には動画リンク・説明・確認画像を出力します。" : "「証拠を保存…」で取り出せます。") + "\n\n内容の SHA-256 は再生・取り出し・出力時に検証します。", Dock = DockStyle.Fill, Padding = new(18), AutoEllipsis = true });
+                return;
+            }
             byte[] bytes = workspace.ReadEvidence(current.Data.Id, e);
             if (e.Kind == "image") preview.Controls.Add(new PictureBox { Dock = DockStyle.Fill, Image = Ui.Decode(bytes), SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.FromArgb(241, 244, 242) });
             else if (e.Kind == "table")
@@ -242,13 +354,19 @@ internal sealed class MainForm : Form
         }
         catch (Exception ex) { preview.Controls.Add(new TextBox { Multiline = true, ReadOnly = true, Dock = DockStyle.Fill, Text = ex.Message }); }
     }
-    private void SaveEvidence()
+    private async Task SaveEvidenceAsync()
     {
+        if (exporting) return;
+        try
+        {
         var e = SelectedEvidence(); using var d = new SaveFileDialog { FileName = e.OriginalName == "" ? e.File : e.OriginalName, Title = "証拠ファイルを保存" };
         if (d.ShowDialog(this) != DialogResult.OK) return;
         string destination = Path.GetFullPath(d.FileName), root = workspace!.Root + Path.DirectorySeparatorChar;
         if (destination.StartsWith(root, StringComparison.OrdinalIgnoreCase)) throw new IOException("証拠の取り出し先はプロジェクト外を選択してください。");
-        File.WriteAllBytes(destination, workspace.ReadEvidence(current!.Data.Id, e));
+        string caseId = current!.Data.Id;
+        await RunStorageAsync(() => { workspace.CopyEvidence(caseId, e, destination, false); return true; }, "証拠をコピー・検証しています…");
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "証拠を保存できませんでした"); }
     }
     private async Task ExportAsync()
     {
@@ -258,8 +376,7 @@ internal sealed class MainForm : Form
             if (workspace == null) throw new InvalidOperationException("プロジェクトを開いてください。"); if (current != null) Save();
             using var d = new FolderBrowserDialog { Description = "成果物の出力先（新しい日時フォルダーを作成します）", UseDescriptionForTitle = true, SelectedPath = workspace.Root };
             if (d.ShowDialog(this) != DialogResult.OK) return;
-            var snapshot = workspace.Snapshot(); exporting = true; Enabled = false; UseWaitCursor = true; status.Text = "Excel・添付・ZIP を出力しています…";
-            string result = await Task.Run(() => Export.Deliver(snapshot, d.SelectedPath));
+            string result = await RunStorageAsync(() => Export.Deliver(workspace, d.SelectedPath), "Excel・添付・ZIP を出力しています…");
             status.Text = "出力完了：" + result;
             // Open only Explorer, never an HTML file or browser.
             if (MessageBox.Show(this, "Excel・添付・ZIP を出力しました。\n\n" + result + "\n\n保存先フォルダーを開きますか？", "出力完了", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)

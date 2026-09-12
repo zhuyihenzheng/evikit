@@ -19,7 +19,7 @@ public static class Inputs
         ".xml" => ("text", "API", "xml"),
         ".sql" => ("text", "DB", "sql"),
         ".txt" or ".yaml" or ".yml" or ".ini" or ".conf" => ("text", "設定", "plain"),
-        _ => ("file", "その他", "")
+        _ => ("file", Media.IsVideo(file) ? "画面" : "その他", "")
     };
 }
 public static class Tables

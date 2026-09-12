@@ -31,6 +31,7 @@ public sealed class Step
 {
     public int No { get; set; }
     public string Action { get; set; } = "";
+    public string? Condition { get; set; }
     public string Expected { get; set; } = "";
     public string Actual { get; set; } = "";
     public string Verdict { get; set; } = "";

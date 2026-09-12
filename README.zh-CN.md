@@ -35,7 +35,17 @@ Expand-Archive .\evikit-win-x64.zip -DestinationPath .\evikit
 
 快捷键：`Ctrl+S` 保存；`Ctrl+Shift+V` 导入剪贴板图片或文本；标注窗口的 `Ctrl+Z` 撤销。
 
-**内置截图快捷键尚未实现。** 先通过 Windows `Win+Shift+S` 等方式截图，再回到工具粘贴。RDP 的快捷键与剪贴板是否传到远程 Windows，取决于远程桌面的设置。
+**Windows alpha 0.2 已加入连续截图和视频证据：**
+
+- 选择用例与步骤，点击「連続スクリーンショット」。`Ctrl+Alt+S` 框选截图，`Ctrl+Alt+R` 重复截取上次区域，逐张自动保存、编号。
+- 结束后，在缩略图列表中集中修改说明、顺序和步骤，批量追加说明，并进行图片标注。
+- 每个测试步骤新增「テスト条件」栏；可通过「テスト条件…」填写多行测试数据、权限和初始状态。Excel 在对应步骤下方显示。
+- 「＋ 動画」导入 MP4 / MOV / AVI / WMV / MKV / WebM / M4V，单个文件最大 2 GiB，分段复制和校验。
+- 「動画の確認画像」添加已截取的关键画面，填写 `00:35` 等时间点，自动关联同一步骤。
+- Excel 显示关键画面、说明和视频链接；原视频随附件 ZIP 交付。先完整解压，再打开 Excel。
+- 客户端首次打开视频时，选择公司允许的本地播放器 `.exe`；Excel 的视频链接则使用系统文件关联。需要可用的播放器与对应解码能力。
+
+没有加入内置录屏、自动提取视频帧或 Excel 内直接播放视频。Windows 标准截图工具仍可以通过原有粘贴方式导入。详细操作见 [客户端指南](native-windows/README.md)。
 
 支持原图保留、框、箭头、编号、文字、裁剪、证据删除恢复。尚未验证真实 Windows 的界面布局、IME、DPI、RDP 交互以及 Excel 的打印和超链接点击。包为未签名的 alpha。
 
@@ -98,9 +108,9 @@ Excel 的附件链接是相对路径，交付时应带上 `files/` 或交付完�
 
 ## 验证与开发
 
-- 浏览器版：75 项测试、类型检查、构建，以及 Mac 浏览器完整流程。
-- 原生版：28 项核心检查、Windows x64 编译、微软 Open XML 验证、ExcelJS 独立回读和两版 YAML 互读。
-- 尚未实现：内置截图、自动采集、Runs、遮罩、Word/PDF。原生版还不支持 WebP、Shift-JIS、用例删除和恢复列表。
+- 浏览器版：77 项测试、类型检查、构建，以及此前的 Mac 浏览器流程验证。此次只增加测试条件的数据读写兼容，未改网页版界面；条件的编辑和导出请使用客户端。
+- 原生版：48 项核心检查、64 张图片导出、64 MiB 视频附件分段处理、步骤条件读写与导出、Windows x64 编译、Open XML / ExcelJS 验证。
+- 尚未实现：内置录屏、自动提取视频帧、DB/API 自动采集、Runs、遮罩、Word/PDF。原生版还不支持 WebP、Shift-JIS、用例删除和恢复列表。大视频请使用客户端；网页版未针对大视频适配和测试。
 
 ```bash
 bun run check
@@ -108,6 +118,6 @@ cd native-windows
 dotnet run --project tests/Evikit.Checks -c Release -- ../examples/reference
 ```
 
-原生开发需要 .NET SDK 10.0.400，普通使用者不需要 SDK。Windows 下执行 `native-windows/build.ps1` 可生成自包含发布 ZIP。详细架构：[浏览器版](docs/05-architecture.md)、[原生版](native-windows/ARCHITECTURE.md)。
+原生开发需要 .NET SDK 10.0.401，普通使用者不需要 SDK。Windows 下执行 `native-windows/build.ps1` 可生成自包含发布 ZIP。详细架构：[浏览器版](docs/05-architecture.md)、[原生版](native-windows/ARCHITECTURE.md)。
 
 当前尚未为 evikit 源码设定公开分发许可证。第三方组件许可见 [说明](native-windows/THIRD-PARTY-NOTICES.md)。

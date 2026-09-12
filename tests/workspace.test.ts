@@ -44,6 +44,12 @@ const newCase = () =>
   });
 
 describe("workspace persistence", () => {
+  test("native step conditions survive browser metadata edits and YAML reload", () => {
+    const initial = workspace.createCase({ id: "TC-COND", title: "条件を保持", steps: [{ no: 1, condition: "ID：00012\n残高：0" }] });
+    const saved = workspace.updateCase(initial.data.id, { ...initial.data, title: "編集後" }, initial.revision);
+    expect(saved.data.steps[0]!.condition).toBe("ID：00012\n残高：0");
+    expect(loadCase(dir, initial.data.id).steps[0]!.condition).toBe("ID：00012\n残高：0");
+  });
   test("new cases inherit project defaults, and blank verdict stays 未実施", () => {
     const c = newCase();
     expect(c.data.tester).toBe("担当 A");

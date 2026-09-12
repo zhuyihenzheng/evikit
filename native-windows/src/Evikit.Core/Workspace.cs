@@ -11,7 +11,7 @@ namespace Evikit.Core;
 
 public sealed record CaseDocument(TestCase Data, string Revision);
 public sealed record ProjectDocument(Project Data, string Revision);
-public sealed record NewEvidence(string Kind, string Category, string Caption, int? Step, string Source, string Note, string Lang, byte[] Data, string Extension, string OriginalName = "");
+public sealed record NewEvidence(string Kind, string Category, string Caption, int? Step, string Source, string Note, string Lang, byte[] Data, string Extension, string OriginalName = "", string? SourcePath = null);
 public sealed record ArchivedEvidence(string CaseId, Evidence Evidence);
 public sealed record EvidenceSnapshot(Evidence Metadata, byte[] Bytes);
 public sealed record CaseSnapshot(TestCase Data, List<EvidenceSnapshot> Evidence);
@@ -20,6 +20,41 @@ public sealed record ProjectSnapshot(Project Project, List<CaseSnapshot> Cases);
 public static class Files
 {
     public static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+    public static string HashFile(string path)
+    {
+        using var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, FileOptions.SequentialScan);
+        return Convert.ToHexStringLower(SHA256.HashData(source));
+    }
+    public static (long Size, string Hash) CopyAtomic(string sourcePath, string destination, long maximum, string expectedHash = "", bool createOnly = true)
+    {
+        using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, FileOptions.SequentialScan);
+        long length = source.Length;
+        if (length > maximum) throw new InvalidDataException($"ファイルが上限 {maximum / 1024 / 1024:N0} MiB を超えています。");
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        string temp = destination + ".tmp-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            long total = 0;
+            using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                var buffer = new byte[1024 * 1024]; int count;
+                while ((count = source.Read(buffer)) != 0)
+                {
+                    total += count;
+                    if (total > maximum) throw new InvalidDataException("コピー中にファイルがサイズ上限を超えました。");
+                    output.Write(buffer, 0, count); hash.AppendData(buffer, 0, count);
+                }
+                output.Flush(true);
+            }
+            var digest = Convert.ToHexStringLower(hash.GetHashAndReset());
+            if (total != length || source.Length != length) throw new IOException("コピー中にファイルサイズが変わりました。再試行してください。");
+            if (expectedHash != "" && digest != expectedHash) throw new InvalidDataException("SHA-256 が一致しません。証拠が変更されています。");
+            File.Move(temp, destination, !createOnly);
+            return (total, digest);
+        }
+        finally { if (File.Exists(temp)) File.Delete(temp); }
+    }
     public static string Safe(string root, params string[] parts)
     {
         root = Path.GetFullPath(root);
@@ -173,12 +208,29 @@ public sealed class Workspace : IDisposable
             Files.Atomic(path, Yaml.Write(doc.Data)); return LoadCase(doc.Data.Id);
         }
     }
-    public byte[] ReadEvidence(string caseId, Evidence e, bool original = false)
+    public string EvidencePath(string caseId, Evidence e, bool original = false)
     {
         Contract.Id(caseId); var file = original ? e.OriginalFile ?? e.File : e.File; Contract.FileName(file);
-        var bytes = File.ReadAllBytes(Files.Safe(Root, "evidence", caseId, file));
+        return Files.Safe(Root, "evidence", caseId, file);
+    }
+    public void VerifyEvidence(string caseId, Evidence e, bool original = false)
+    {
+        string path = EvidencePath(caseId, e, original);
+        if (new FileInfo(path).Length > (e.Kind == "file" ? Media.MaxFileBytes : Media.MaxInlineBytes)) throw new InvalidDataException("証拠ファイルがサイズ上限を超えています。");
         var expected = original ? e.OriginalSha256 ?? e.Sha256 : e.Sha256;
-        if (!string.IsNullOrEmpty(expected) && Files.Hash(bytes) != expected) throw new InvalidDataException($"{caseId}/{file}: SHA-256 が一致しません。証拠が変更されています。");
+        if (Files.HashFile(path) != expected && !string.IsNullOrEmpty(expected)) throw new InvalidDataException($"{caseId}/{e.File}: SHA-256 が一致しません。証拠が変更されています。");
+    }
+    public void CopyEvidence(string caseId, Evidence e, string destination, bool createOnly = true)
+    {
+        Files.CopyAtomic(EvidencePath(caseId, e), destination, e.Kind == "file" ? Media.MaxFileBytes : Media.MaxInlineBytes, e.Sha256, createOnly);
+    }
+    public byte[] ReadEvidence(string caseId, Evidence e, bool original = false)
+    {
+        string path = EvidencePath(caseId, e, original);
+        if (new FileInfo(path).Length > Media.MaxInlineBytes) throw new InvalidDataException("大きい添付は「証拠を保存」または成果物の出力で取り出してください。");
+        var bytes = File.ReadAllBytes(path);
+        var expected = original ? e.OriginalSha256 ?? e.Sha256 : e.Sha256;
+        if (!string.IsNullOrEmpty(expected) && Files.Hash(bytes) != expected) throw new InvalidDataException($"{caseId}/{e.File}: SHA-256 が一致しません。証拠が変更されています。");
         return bytes;
     }
     public CaseDocument AddEvidence(CaseDocument doc, NewEvidence input)
@@ -186,6 +238,7 @@ public sealed class Workspace : IDisposable
         lock (gate)
         {
             CheckRevision(CasePath(doc.Data.Id), doc.Revision);
+            if (input.SourcePath != null) return AddFileEvidence(doc, input);
             if (input.Data.Length > 25 * 1024 * 1024) throw new InvalidDataException("証拠は 25 MiB 以下にしてください。");
             var c = Contract.Clone(doc.Data);
             var next = Math.Max(c.NextEvidenceNumber ?? 1, c.Evidence.Select(e => int.Parse(e.Id[1..])).DefaultIfEmpty(0).Max() + 1);
@@ -199,6 +252,81 @@ public sealed class Workspace : IDisposable
             return SaveCase(new(c, doc.Revision));
         }
     }
+    private CaseDocument AddFileEvidence(CaseDocument doc, NewEvidence input)
+    {
+        if (input.Kind != "file" || input.Data.Length != 0) throw new InvalidDataException("ファイルパスによる取込は file 証拠専用です。");
+        if (!System.Text.RegularExpressions.Regex.IsMatch(input.Extension, "^[A-Za-z0-9]{1,10}$")) throw new InvalidDataException("不正な拡張子です。");
+        var c = Contract.Clone(doc.Data);
+        int next = Math.Max(c.NextEvidenceNumber ?? 1, c.Evidence.Select(e => int.Parse(e.Id[1..])).DefaultIfEmpty(0).Max() + 1);
+        string id = $"E{next:00}";
+        // Unique file names make an interrupted import retry safe without replacing old bytes.
+        string file = $"{id}-{Guid.NewGuid():N}.{input.Extension.ToLowerInvariant()}";
+        var e = new Evidence { Id = id, Kind = "file", Category = input.Category, Caption = input.Caption, Step = input.Step,
+            Source = input.Source, Note = input.Note, Lang = "", File = file, OriginalName = Path.GetFileName(input.OriginalName),
+            CapturedAt = DateTimeOffset.Now.ToString("yyyy-MM-ddTHH:mm:sszzz") };
+        c.Evidence.Add(e); c.NextEvidenceNumber = next + 1; Contract.Validate(c);
+        var copied = Files.CopyAtomic(input.SourcePath!, Files.Safe(Root, "evidence", c.Id, file), Media.MaxFileBytes);
+        e.Size = copied.Size; e.Sha256 = copied.Hash;
+        return SaveCase(new(c, doc.Revision));
+    }
+
+    public CaseDocument AddCapturedImage(CaseDocument doc, PendingCapture capture)
+    {
+        lock (gate)
+        {
+            CaptureInbox.Validate(capture);
+            if (doc.Data.Id != capture.CaseId) throw new InvalidDataException("撮影先の用例が一致しません。");
+            CheckRevision(CasePath(doc.Data.Id), doc.Revision);
+            var c = Contract.Clone(doc.Data);
+            var existing = c.Evidence.FirstOrDefault(e => (e.OriginalFile ?? e.File) == capture.FileName);
+            if (existing != null)
+            {
+                if (existing.Kind != "image" || Files.Hash(ReadEvidence(c.Id, existing, true)) != Files.Hash(capture.Png))
+                    throw new IOException("保存済みの撮影と回収画像が一致しません。");
+                return doc;
+            }
+            var path = Files.Safe(Root, "evidence", c.Id, capture.FileName);
+            if (File.Exists(path))
+            {
+                if (Files.Hash(File.ReadAllBytes(path)) != Files.Hash(capture.Png)) throw new IOException("回収先の画像が変更されています。");
+                // A leftover journal must not resurrect an intentionally deleted image.
+                var trash = Files.Safe(Root, ".trash");
+                if (Directory.Exists(trash))
+                    foreach (var directory in Directory.EnumerateDirectories(trash, "native-*"))
+                    {
+                        var recordPath = Files.Safe(Root, ".trash", Path.GetFileName(directory), "evidence.json");
+                        if (!File.Exists(recordPath)) continue;
+                        var archived = JsonSerializer.Deserialize<ArchivedEvidence>(File.ReadAllBytes(recordPath), Contract.Json);
+                        if (archived?.CaseId == c.Id && (archived.Evidence.OriginalFile ?? archived.Evidence.File) == capture.FileName) return doc;
+                    }
+            }
+            var next = Math.Max(c.NextEvidenceNumber ?? 1, c.Evidence.Select(e => int.Parse(e.Id[1..])).DefaultIfEmpty(0).Max() + 1);
+            c.Evidence.Add(new Evidence { Id = $"E{next:00}", Kind = "image", Category = "画面", Caption = capture.Caption,
+                Step = capture.Step, File = capture.FileName, CapturedAt = capture.CapturedAt,
+                Source = "evikit 連続スクリーンショット", Size = capture.Png.Length, Sha256 = Files.Hash(capture.Png) });
+            c.NextEvidenceNumber = next + 1; Contract.Validate(c);
+            if (!File.Exists(path)) Files.Atomic(path, capture.Png, true);
+            return SaveCase(new(c, doc.Revision));
+        }
+    }
+
+    public CaseDocument SaveImageReview(CaseDocument doc, IReadOnlyList<ImageReviewEdit> edits)
+    {
+        var c = Contract.Clone(doc.Data);
+        var images = c.Evidence.Where(e => e.Kind == "image").ToDictionary(e => e.Id);
+        if (edits.Count != images.Count || edits.Select(e => e.Id).Distinct().Count() != edits.Count || edits.Any(e => !images.ContainsKey(e.Id)))
+            throw new InvalidDataException("画像一覧が一致しません。再読込してください。");
+        int index = 0;
+        for (int i = 0; i < c.Evidence.Count; i++)
+        {
+            if (c.Evidence[i].Kind != "image") continue;
+            var edit = edits[index++]; var image = images[edit.Id];
+            image.Caption = edit.Caption; image.Step = edit.Step; image.Note = edit.Note;
+            c.Evidence[i] = image; // Keep non-image evidence in its original slot.
+        }
+        return SaveCase(new(c, doc.Revision));
+    }
+
     public (CaseDocument Document, string ArchiveId) DeleteEvidence(CaseDocument doc, string id)
     {
         lock (gate)
@@ -219,7 +347,7 @@ public sealed class Workspace : IDisposable
             var saved = JsonSerializer.Deserialize<ArchivedEvidence>(File.ReadAllBytes(Files.Safe(Root, ".trash", "native-" + archive, "evidence.json")), Contract.Json)!;
             var doc = LoadCase(saved.CaseId); var e = saved.Evidence;
             if (doc.Data.Evidence.Any(item => item.Id == e.Id)) throw new IOException("同じ証拠 ID が既に存在します。");
-            _ = ReadEvidence(saved.CaseId, e);
+            VerifyEvidence(saved.CaseId, e);
             if (e.Step != null && !doc.Data.Steps.Any(s => s.No == e.Step)) e.Step = null;
             doc.Data.Evidence.Add(e); return SaveCase(doc);
         }
@@ -245,12 +373,23 @@ public sealed class Workspace : IDisposable
         var original = ReadEvidence(c.Id, e, true); e.File = e.OriginalFile ?? e.File; e.Sha256 = Files.Hash(original); e.Size = original.Length;
         e.OriginalFile = null; e.OriginalSha256 = null; e.Annotations = null; return SaveCase(new(c, doc.Revision));
     }
-    public ProjectSnapshot Snapshot()
+    public ProjectSnapshot Snapshot() => SnapshotCore(null);
+    internal ProjectSnapshot StageSnapshot(string attachmentRoot) => SnapshotCore(attachmentRoot);
+    private ProjectSnapshot SnapshotCore(string? attachmentRoot)
     {
         lock (gate)
         {
             var project = LoadProject(); var cases = ListCases();
-            var result = new ProjectSnapshot(project.Data, cases.Select(c => new CaseSnapshot(c.Data, c.Data.Evidence.Select(e => { if (e.OriginalFile != null) _ = ReadEvidence(c.Data.Id, e, true); return new EvidenceSnapshot(e, ReadEvidence(c.Data.Id, e)); }).ToList())).ToList());
+            var result = new ProjectSnapshot(project.Data, cases.Select(c => new CaseSnapshot(c.Data, c.Data.Evidence.Select(e =>
+            {
+                if (e.OriginalFile != null) VerifyEvidence(c.Data.Id, e, true);
+                if (attachmentRoot == null) return new EvidenceSnapshot(e, ReadEvidence(c.Data.Id, e));
+                string destination = Files.Safe(attachmentRoot, c.Data.Id, e.File);
+                CopyEvidence(c.Data.Id, e, destination);
+                e.Size = new FileInfo(destination).Length;
+                // File evidence (including videos) never occupies a byte[] in an export snapshot.
+                return new EvidenceSnapshot(e, e.Kind == "file" ? [] : File.ReadAllBytes(destination));
+            }).ToList())).ToList());
             CheckRevision(Files.Safe(Root, "project.yaml"), project.Revision);
             foreach (var c in cases) CheckRevision(CasePath(c.Data.Id), c.Revision);
             return result;

@@ -113,6 +113,8 @@ export const EvidenceSchema = z.object({
 export const StepSchema = z.object({
   no: z.number().int().positive(),
   action: optionalText,
+  /** Native editor field; preserve on shared-project reads and saves. */
+  condition: optionalText.optional(),
   expected: optionalText,
   actual: optionalText,
   verdict: optionalText,

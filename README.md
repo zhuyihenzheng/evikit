@@ -15,7 +15,7 @@
 | 利用者による追加インストール | 配布 ZIP は .NET ランタイム同梱 | Bun と npm パッケージの取得が必要 |
 | ブラウザ・WebView2・Bun | 使用しない | Bun + ブラウザを使用 |
 | 出力 | Excel / 添付 / manifest / ZIP。HTML なし | Excel / 単一 HTML / 添付 / manifest / ZIP |
-| 現在の状態 | 0.1 alpha、Windows へのクロスコンパイル済み | 0.2 alpha、Mac の実ブラウザで一連の操作を確認済み |
+| 現在の状態 | 0.2 alpha、連続撮影・動画添付、Windows ビルド検証済み | 0.2 alpha、Mac の実ブラウザで一連の操作を確認済み |
 
 ブラウザ禁止の Windows リモートデスクトップには、Windows デスクトップ版が対象です。アプリの実行可否には会社の許可ポリシーが適用されます。
 
@@ -37,7 +37,10 @@ Expand-Archive .\evikit-win-x64.zip -DestinationPath .\evikit
 - `Ctrl+S`：保存。
 - `Ctrl+Shift+V`：クリップボードの画像・テキストを証拠として追加。
 - 注釈ウィンドウの `Ctrl+Z`：直前の操作を取り消す。
-- **アプリ内のスクリーンショット取得は未実装。** Windows の `Win+Shift+S` などで撮影後、evikit に貼り付けます。RDP 内のキー・クリップボード転送は接続設定によります。
+- 「連続スクリーンショット」を開始 → `Ctrl+Alt+S` で範囲撮影、`Ctrl+Alt+R` で同じ範囲を再撮影。毎回自動保存し、終了後に説明・順序・注釈をまとめて整理できます。
+- ステップごとに「テスト条件」を入力できます。複数行は「テスト条件…」から編集し、Excel では対応ステップの直下に表示します。
+- 「＋ 動画」で MP4 / MOV / AVI / WMV / MKV / WebM / M4V を追加（1 ファイル最大 2 GiB）。「動画の確認画像」で時間点付きの画像を追加。Excel は動画リンクと説明、ZIP は原動画も含みます。
+- 「動画を開く」の初回に会社で許可されたローカルプレーヤーの実行ファイルを選択します。コーデック・プレーヤーは別途必要です。Excel の動画リンクは OS のファイル関連付けを使います。
 
 未署名の試用版です。詳しい操作・制限は [Windows README](native-windows/README.md)、実機確認項目は [Windows 受け入れチェック](native-windows/WINDOWS-ACCEPTANCE.md) を参照してください。
 
@@ -119,11 +122,13 @@ Windows 配布 ZIP の利用にはパッケージ取得は不要です。企業�
 
 | 対象 | 確認済み | 未確認 / 未実装 |
 | --- | --- | --- |
-| ブラウザ版 | 75 tests、型検査、ビルド、Mac で編集→証拠→注釈→出力 | Windows サーバー実行、実機スマートフォン |
-| Windows 原生版 | 28 Core checks、x64 ビルド、Microsoft Open XML 検証、ExcelJS 回読、両版 YAML 互読 | Windows ウィンドウ、RDP、IME、DPI、実 Excel の印刷・クリック |
-| 共通 | 四種証拠、CSV 文字列保持、原図保留、保存競合、納品 ZIP | 自動撮影、DB / API 自動採集、Runs、マスキング、Word / PDF |
+| ブラウザ版 | 77 tests、型検査、ビルド、Mac での既存 UI 確認 | Windows サーバー実行、実機スマートフォン |
+| Windows 原生版 | 48 Core checks、x64 ビルド、64 枚画像出力、64 MiB 添付、ステップ条件、Open XML / ExcelJS 検証 | Windows ウィンドウ、RDP、IME、DPI、プレーヤー連携、実 Excel の印刷・クリック |
+| 共通 | 四種証拠、CSV 文字列保持、原図保留、保存競合、納品 ZIP | DB / API 自動採集、Runs、マスキング、Word / PDF |
 
 原生版は WebP / Shift-JIS / 端末表の自動認識に未対応です。用例削除と復元一覧も未実装です。両版とも大規模プロジェクト、複数端末同時編集、障害復旧の網羅検証は完了していません。
+
+動画の内蔵録画・自動フレーム抽出・Excel 内での動画再生は実装していません。大きい動画はデスクトップ版で処理してください。ブラウザ版の大動画対応は未検証です。
 
 詳細：[ブラウザ版の設計と QA](docs/05-architecture.md) · [原生版の設計](native-windows/ARCHITECTURE.md) · [原生版 QA](native-windows/QA.md)
 

@@ -12,7 +12,7 @@ internal sealed class MainForm : Form
     private readonly ListBox cases = new() { Dock = DockStyle.Fill, IntegralHeight = false, BorderStyle = BorderStyle.None, DisplayMember = "Label" };
     private readonly TextBox search = Ui.Text();
     private readonly CheckBox ngOnly = new() { Text = "NG のみ", AutoSize = true, Padding = new(4) };
-    private readonly Button renameCase;
+    private readonly Button renameCase, deleteCase, deletedCases;
     private readonly Label projectLabel = new() { Text = "プロジェクト未選択", AutoSize = true, MaximumSize = new(245, 0), Padding = new(10), ForeColor = Ui.Green };
     private readonly Label caseHeading = new() { Text = "プロジェクトを開いてください", Dock = DockStyle.Top, Height = 54, Font = new Font((SystemFonts.MessageBoxFont ?? SystemFonts.DefaultFont).FontFamily, 16, FontStyle.Bold), Padding = new(12), ForeColor = Ui.Green };
     private readonly TextBox title = Ui.Text(), tester = Ui.Text(), date = Ui.Text(), env = Ui.Text(), precondition = Ui.Text("", true), note = Ui.Text("", true);
@@ -34,7 +34,9 @@ internal sealed class MainForm : Form
         var sidebar = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new(8) };
         var filter = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 }; filter.Controls.Add(projectLabel); search.PlaceholderText = "ID・用例名で検索"; filter.Controls.Add(search); filter.Controls.Add(ngOnly);
         renameCase = Ui.Button("名前を変更", RenameCase); renameCase.Enabled = false;
-        var newCase = Ui.Bar(Ui.Button("＋ 用例を追加", AddCase), renameCase); newCase.Dock = DockStyle.Bottom;
+        deleteCase = Ui.Button("用例を削除", DeleteCurrentCase); deleteCase.Enabled = false;
+        deletedCases = Ui.Button("削除した用例", ShowDeletedCases); deletedCases.Enabled = false;
+        var newCase = Ui.Bar(Ui.Button("＋ 用例を追加", AddCase), renameCase, deleteCase, deletedCases); newCase.Dock = DockStyle.Bottom;
         sidebar.Controls.Add(cases); sidebar.Controls.Add(filter); sidebar.Controls.Add(newCase);
         var editor = new Panel { Dock = DockStyle.Fill, Padding = new(8, 0, 0, 0) }; editor.Controls.Add(tabs); editor.Controls.Add(caseHeading);
         layout.Controls.Add(sidebar, 0, 0); layout.Controls.Add(editor, 1, 0);
@@ -56,6 +58,8 @@ internal sealed class MainForm : Form
         {
             if (e.KeyCode == Keys.F2 && e.Modifiers == Keys.None && cases.SelectedItem is CaseItem)
             { e.SuppressKeyPress = true; Ui.Guard(RenameCase); }
+            else if (e.KeyCode == Keys.Delete && e.Modifiers == Keys.None && cases.SelectedItem is CaseItem)
+            { e.SuppressKeyPress = true; Ui.Guard(DeleteCurrentCase); }
         };
         cases.MouseDoubleClick += (_, e) =>
         {
@@ -99,6 +103,7 @@ internal sealed class MainForm : Form
         if (!ResolveDraft()) return;
         if (workspace != null && Path.GetFullPath(path).Equals(workspace.Root, StringComparison.OrdinalIgnoreCase)) { Reload(); return; }
         var opened = new Workspace(path); workspace?.Dispose(); workspace = opened; current = null; archive = null;
+        deletedCases.Enabled = true;
         var p = workspace.LoadProject().Data; projectLabel.Text = p.Name; Text = p.Name + " — evikit Desktop";
         verdict.Items.Clear(); verdict.Items.Add(""); verdict.Items.AddRange(p.Verdicts.ToArray());
         caseList = workspace.ListCases(); FilterCases(); if (cases.Items.Count > 0) cases.SelectedIndex = 0; else ClearCase(); status.Text = path;
@@ -129,7 +134,19 @@ internal sealed class MainForm : Form
         if (result == DialogResult.No && current != null && workspace != null) LoadCase(workspace.LoadCase(current.Data.Id));
         return true;
     }
-    private void ClearCase() { current = null; dirty = false; dirtyLabel.Text = ""; tabs.Enabled = renameCase.Enabled = false; caseHeading.Text = "「＋ 用例を追加」から開始してください"; }
+    private void ClearCase()
+    {
+        loading = true;
+        try
+        {
+            current = null; dirty = false; dirtyLabel.Text = "";
+            tabs.Enabled = renameCase.Enabled = deleteCase.Enabled = false;
+            steps.DataSource = null; evidence.DataSource = null; DisposePreview();
+            foreach (var field in new Control[] { title, tester, date, env, precondition, note, verdict }) field.Text = "";
+            caseHeading.Text = "用例を選択・追加、または「削除した用例」から復元";
+        }
+        finally { loading = false; }
+    }
     private void LoadCase(CaseDocument doc)
     {
         loading = true;
@@ -137,7 +154,7 @@ internal sealed class MainForm : Form
         {
             current = doc; var c = doc.Data; title.Text = c.Title; tester.Text = c.Tester; date.Text = c.Date; env.Text = c.Env; verdict.Text = c.Verdict; precondition.Text = c.Precondition; note.Text = c.Note;
             steps.DataSource = new BindingList<Step>(c.Steps); evidence.DataSource = new BindingList<Evidence>(c.Evidence);
-            caseHeading.Text = c.Id + "  /  " + c.Title; tabs.Enabled = renameCase.Enabled = true; dirty = false; dirtyLabel.Text = "保存済み";
+            caseHeading.Text = c.Id + "  /  " + c.Title; tabs.Enabled = renameCase.Enabled = deleteCase.Enabled = true; dirty = false; dirtyLabel.Text = "保存済み";
         }
         finally { loading = false; }
         PreviewEvidence();
@@ -162,7 +179,7 @@ internal sealed class MainForm : Form
     private void AddCase()
     {
         if (workspace == null) throw new InvalidOperationException("プロジェクトを開いてください。"); if (!ResolveDraft()) return;
-        int n = 1; while (caseList.Any(c => c.Data.Id.Equals($"TC-{n:000}", StringComparison.OrdinalIgnoreCase))) n++;
+        var usedIds = workspace.UnavailableCaseIds(); int n = 1; while (usedIds.Contains($"TC-{n:000}")) n++;
         var id = Ui.Prompt(this, "用例を追加", "用例 ID", $"TC-{n:000}"); if (id == null) return;
         var name = Ui.Prompt(this, "用例を追加", "用例名"); if (name == null) return;
         LoadCase(workspace.CreateCase(id, name)); caseList = workspace.ListCases(); search.Text = ""; ngOnly.Checked = false; FilterCases(); tabs.SelectedIndex = 0;
@@ -180,6 +197,30 @@ internal sealed class MainForm : Form
         bool clearedSearch = search.Text.Length > 0 && !(current!.Data.Id + " " + current.Data.Title).Contains(search.Text, StringComparison.CurrentCultureIgnoreCase);
         if (clearedSearch) search.Clear();
         status.Text = "用例名を変更して保存しました。" + (clearedSearch ? "旧名の検索条件を解除しました。" : "");
+    }
+    private void DeleteCurrentCase()
+    {
+        if (exporting) return;
+        NeedCase(); var c = current!.Data;
+        string message = $"{c.Id}  {title.Text}\n\n{c.Steps.Count} ステップ / {c.Evidence.Count} 件のエビデンス（画像 {c.Evidence.Sum(e => e.ImageCount)} 枚）\n\nこの用例を削除一覧へ移動しますか？画像・動画などは保持し、「削除した用例」から復元できます。";
+        if (dirty) message += "\n未保存の編集も保存してから移動します。";
+        if (MessageBox.Show(this, message, "用例を削除", MessageBoxButtons.OKCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.OK) return;
+        int selectedIndex = cases.SelectedIndex;
+        Save(); workspace!.DeleteCase(current!);
+        archive = null; caseList = workspace.ListCases(); ClearCase(); FilterCases();
+        if (cases.Items.Count > 0) cases.SelectedIndex = Math.Clamp(selectedIndex, 0, cases.Items.Count - 1);
+        status.Text = c.Id + " を削除一覧へ移動しました。「削除した用例」から復元できます。";
+    }
+    private void ShowDeletedCases()
+    {
+        if (exporting) return;
+        if (workspace == null) throw new InvalidOperationException("プロジェクトを開いてください。");
+        if (!ResolveDraft()) return;
+        using var dialog = new DeletedCasesForm(workspace);
+        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Restored == null) return;
+        caseList = workspace.ListCases(); LoadCase(dialog.Restored);
+        search.Clear(); ngOnly.Checked = false; FilterCases(); tabs.SelectedIndex = 0;
+        status.Text = dialog.Restored.Data.Id + " を復元しました。";
     }
     private void ProjectSettings()
     {

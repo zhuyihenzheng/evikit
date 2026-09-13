@@ -193,7 +193,7 @@ public sealed partial class Workspace : IDisposable
         lock (gate)
         {
             Contract.Id(id);
-            if (ListCases().Any(c => string.Equals(c.Data.Id, id, StringComparison.OrdinalIgnoreCase))) throw new IOException("用例 ID が既に存在します。");
+            if (UnavailableCaseIds().Contains(id)) throw new IOException("使用済みの用例 ID です。別の ID を指定するか「削除した用例」から復元してください。");
             var p = LoadProject().Data;
             var c = new TestCase { Id = id, Title = title, Tester = p.Tester, Env = p.Env, Date = DateTime.Now.ToString("yyyy-MM-dd") };
             Files.Atomic(Files.Safe(Root, "cases", id + ".yaml"), Yaml.Write(c), true); return LoadCase(id);

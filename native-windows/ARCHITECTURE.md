@@ -16,6 +16,7 @@ Evikit.Windows（仅 Windows）
   EvidenceDialog    四类录入与元数据
   AnnotationForm    GDI+ 注释、原图坐标、PNG 生成
   CaptureSessionForm / ScreenCapture  内置连续截图、全局快捷键、固定区域
+  DeletedCasesForm  持久化的已删除用例列表、选择恢复、附件验证进度
   ImageReviewForm   一条证据内的多张图、追加、独立说明 / 排序 / 标注
         ↓ 直接方法调用
 Evikit.Core（可在 Mac 测试）
@@ -47,7 +48,7 @@ YamlDotNet 是唯一直接运行时 NuGet 依赖。Excel 写入器采用 .NET �
 
 PNG/JPEG/GIF/BMP 图像可显示和注释；WebP 不支持。导入图像保留原始字节，标注另存 PNG。表格支持 CSV/TSV，不实现终端表格或 Shift-JIS 自动识别。证据恢复记录独立存放 `.trash/native-*/evidence.json`，当前界面仅支持恢复本会话最后一次删除。
 
-没有用例删除、批次运行历史、蒙版、SQL 执行、API 调用、云同步或自动更新。真实 Windows 界面与 RDP 测试尚未完成，详见 WINDOWS-ACCEPTANCE.md。
+没有永久清除用例、批次运行历史、蒙版、SQL 执行、API 调用、云同步或自动更新。真实 Windows 界面与 RDP 测试尚未完成，详见 WINDOWS-ACCEPTANCE.md。
 
 alpha 0.3 新增 `Evidence.Images: List<ImageItem>?`。为空时使用旧单文件字段；非空时数组是完整且有序的图片集合，顶层 `file` 为空，禁止混合两种文件来源。顶层 ID / Step / 分类 / 标题 / 说明属于整条证据，每张图独立保留 file / sha256 / capturedAt / source / caption / note / originalFile / annotations。稳定图片标识为 `originalFile ?? file`，排序和标注不会改变它。不增加第五种 kind。
 
@@ -58,3 +59,13 @@ alpha 0.3 新增 `Evidence.Images: List<ImageItem>?`。为空时使用旧单文�
 旧项目无须迁移。创建 images 数组后需要 Desktop 0.3 以上；浏览器 schema 明确拒绝该字段，避免剥离未知字段造成丢图。浏览器 UI 与导出未扩展。历史截图保存策略见 [CAPTURE-DESIGN.md](CAPTURE-DESIGN.md)。
 
 测试条件使用 Step 可选字段 `condition`；空项目保持兼容，条件随 Step 对象一起保存、排序、删除。Windows UI 新增条件列和多行编辑，Excel 在该步骤主行下方插入跨列条件行，保持原有 6 列宽度、判定位置和图片锚点。共享 TypeScript schema 只做保留 condition 的数据兼容，浏览器界面与导出暂不显示条件。含条件的项目需要新版数据读取器，旧客户端会拒绝未知字段。
+
+## alpha 0.4 用例删除与恢复
+
+`CaseArchives.cs` 将原用例 YAML 用一次同文件系统 rename 移到 `.trash/native-case-<GUID>/case.yaml`，事先原子保存 `record.json`（ID、原扩展名、删除时间、原始 revision）。YAML 移动是提交点：移动前为活动用例，移动后可从删除列表恢复。仅记录存在但没有 case.yaml 的条目视为未提交删除或已恢复，不显示在删除列表中。
+
+附件、原图、视频和 `.capture-inbox` 保留原位置，避免复制大文件和多个目录移动之间的中断。用例 ID 在删除记录中保留，新建用例和自动编号都跳过活动、删除过或已有证据目录的 ID，防止旧截图、删除恢复记录关联到另一条新用例。
+
+恢复先核对回收记录、YAML revision、全部附件与标注原图哈希，拒绝大小写不敏感的 ID 冲突；随后用一次 rename 将 YAML 放回原 `.yaml` / `.yml` 路径，保留原始字节。失败时保留回收内容。恢复列表跨重启有效。UI 异步执行附件校验；正在验证时禁止关闭恢复窗口。
+
+导出仍只读取 cases 下的活动 YAML，不包含删除的用例、附件或回收记录。浏览器 UI 与其回收记录格式未改；桌面版删除的用例需在新版桌面版中恢复。项目不新增必填数据字段。这仍不是跨主机并发事务，也不提供永久清空回收站。

@@ -12,6 +12,7 @@ internal sealed class MainForm : Form
     private readonly ListBox cases = new() { Dock = DockStyle.Fill, IntegralHeight = false, BorderStyle = BorderStyle.None, DisplayMember = "Label" };
     private readonly TextBox search = Ui.Text();
     private readonly CheckBox ngOnly = new() { Text = "NG のみ", AutoSize = true, Padding = new(4) };
+    private readonly Button renameCase;
     private readonly Label projectLabel = new() { Text = "プロジェクト未選択", AutoSize = true, MaximumSize = new(245, 0), Padding = new(10), ForeColor = Ui.Green };
     private readonly Label caseHeading = new() { Text = "プロジェクトを開いてください", Dock = DockStyle.Top, Height = 54, Font = new Font((SystemFonts.MessageBoxFont ?? SystemFonts.DefaultFont).FontFamily, 16, FontStyle.Bold), Padding = new(12), ForeColor = Ui.Green };
     private readonly TextBox title = Ui.Text(), tester = Ui.Text(), date = Ui.Text(), env = Ui.Text(), precondition = Ui.Text("", true), note = Ui.Text("", true);
@@ -31,13 +32,14 @@ internal sealed class MainForm : Form
         var bar = Ui.Bar(Ui.Button("プロジェクトを開く…", OpenProject), Ui.Button("新規プロジェクト…", CreateProject), Ui.Button("プロジェクト設定", ProjectSettings), Ui.Button("保存  Ctrl+S", Save, true), Ui.Button("再読込", Reload), Ui.Button("連続スクリーンショット", StartCapture, true), Ui.Button("成果物を出力", () => _ = ExportAsync(), true));
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, ColumnStyles = { new(SizeType.Absolute, 265), new(SizeType.Percent, 100) }, Padding = new(8) };
         var sidebar = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new(8) };
-        var filter = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 }; filter.Controls.Add(projectLabel); search.PlaceholderText = "ID・タイトルで検索"; filter.Controls.Add(search); filter.Controls.Add(ngOnly);
-        var newCase = Ui.Bar(Ui.Button("＋ 用例を追加", AddCase)); newCase.Dock = DockStyle.Bottom;
+        var filter = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 }; filter.Controls.Add(projectLabel); search.PlaceholderText = "ID・用例名で検索"; filter.Controls.Add(search); filter.Controls.Add(ngOnly);
+        renameCase = Ui.Button("名前を変更", RenameCase); renameCase.Enabled = false;
+        var newCase = Ui.Bar(Ui.Button("＋ 用例を追加", AddCase), renameCase); newCase.Dock = DockStyle.Bottom;
         sidebar.Controls.Add(cases); sidebar.Controls.Add(filter); sidebar.Controls.Add(newCase);
         var editor = new Panel { Dock = DockStyle.Fill, Padding = new(8, 0, 0, 0) }; editor.Controls.Add(tabs); editor.Controls.Add(caseHeading);
         layout.Controls.Add(sidebar, 0, 0); layout.Controls.Add(editor, 1, 0);
         var basic = new TabPage("用例の情報") { BackColor = Color.White }; var fields = Ui.Fields();
-        Ui.Field(fields, "タイトル", title); Ui.Field(fields, "担当者", tester); Ui.Field(fields, "日付", date); Ui.Field(fields, "環境", env); Ui.Field(fields, "判定（空欄＝自動）", verdict, 48); Ui.Field(fields, "前提条件", precondition, 120); Ui.Field(fields, "備考", note, 150); basic.Controls.Add(fields);
+        Ui.Field(fields, "用例名", title); Ui.Field(fields, "担当者", tester); Ui.Field(fields, "日付", date); Ui.Field(fields, "環境", env); Ui.Field(fields, "判定（空欄＝自動）", verdict, 48); Ui.Field(fields, "前提条件", precondition, 120); Ui.Field(fields, "備考", note, 150); basic.Controls.Add(fields);
         var stepPage = new TabPage("テストステップ"); Ui.Column(steps, "No.", "No", 28, true); Ui.Column(steps, "操作", "Action", 170); Ui.Column(steps, "テスト条件", "Condition", 150); Ui.Column(steps, "期待結果", "Expected", 150); Ui.Column(steps, "実際結果", "Actual", 150); Ui.Column(steps, "判定", "Verdict", 60);
         stepPage.Controls.Add(steps); stepPage.Controls.Add(Ui.Bar(Ui.Button("＋ ステップ", AddStep), Ui.Button("テスト条件…", EditStepCondition), Ui.Button("削除", DeleteStep), Ui.Button("↑", () => MoveStep(-1)), Ui.Button("↓", () => MoveStep(1))));
         var evidencePage = new TabPage("証拠・プレビュー");
@@ -50,6 +52,15 @@ internal sealed class MainForm : Form
         var statusBar = new StatusStrip(); status.Spring = true; status.TextAlign = ContentAlignment.MiddleLeft; statusBar.Items.AddRange([status, dirtyLabel]);
         Controls.Add(layout); Controls.Add(bar); Controls.Add(statusBar);
         cases.SelectedIndexChanged += (_, _) => SwitchCase(); search.TextChanged += (_, _) => FilterCases(); ngOnly.CheckedChanged += (_, _) => FilterCases();
+        cases.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.F2 && e.Modifiers == Keys.None && cases.SelectedItem is CaseItem)
+            { e.SuppressKeyPress = true; Ui.Guard(RenameCase); }
+        };
+        cases.MouseDoubleClick += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left && cases.IndexFromPoint(e.Location) >= 0) Ui.Guard(RenameCase);
+        };
         foreach (var control in new Control[] { title, tester, date, env, precondition, note, verdict }) control.TextChanged += (_, _) => MarkDirty();
         steps.CellValueChanged += (_, _) => MarkDirty(); steps.CurrentCellDirtyStateChanged += (_, _) => { if (steps.IsCurrentCellDirty) steps.CommitEdit(DataGridViewDataErrorContexts.Commit); };
         steps.DataError += (_, e) => { e.ThrowException = false; status.Text = "ステップの入力内容を確認してください。"; };
@@ -118,7 +129,7 @@ internal sealed class MainForm : Form
         if (result == DialogResult.No && current != null && workspace != null) LoadCase(workspace.LoadCase(current.Data.Id));
         return true;
     }
-    private void ClearCase() { current = null; dirty = false; dirtyLabel.Text = ""; tabs.Enabled = false; caseHeading.Text = "「＋ 用例を追加」から開始してください"; }
+    private void ClearCase() { current = null; dirty = false; dirtyLabel.Text = ""; tabs.Enabled = renameCase.Enabled = false; caseHeading.Text = "「＋ 用例を追加」から開始してください"; }
     private void LoadCase(CaseDocument doc)
     {
         loading = true;
@@ -126,7 +137,7 @@ internal sealed class MainForm : Form
         {
             current = doc; var c = doc.Data; title.Text = c.Title; tester.Text = c.Tester; date.Text = c.Date; env.Text = c.Env; verdict.Text = c.Verdict; precondition.Text = c.Precondition; note.Text = c.Note;
             steps.DataSource = new BindingList<Step>(c.Steps); evidence.DataSource = new BindingList<Evidence>(c.Evidence);
-            caseHeading.Text = c.Id + "  /  " + c.Title; tabs.Enabled = true; dirty = false; dirtyLabel.Text = "保存済み";
+            caseHeading.Text = c.Id + "  /  " + c.Title; tabs.Enabled = renameCase.Enabled = true; dirty = false; dirtyLabel.Text = "保存済み";
         }
         finally { loading = false; }
         PreviewEvidence();
@@ -153,8 +164,22 @@ internal sealed class MainForm : Form
         if (workspace == null) throw new InvalidOperationException("プロジェクトを開いてください。"); if (!ResolveDraft()) return;
         int n = 1; while (caseList.Any(c => c.Data.Id.Equals($"TC-{n:000}", StringComparison.OrdinalIgnoreCase))) n++;
         var id = Ui.Prompt(this, "用例を追加", "用例 ID", $"TC-{n:000}"); if (id == null) return;
-        var name = Ui.Prompt(this, "用例を追加", "タイトル"); if (name == null) return;
+        var name = Ui.Prompt(this, "用例を追加", "用例名"); if (name == null) return;
         LoadCase(workspace.CreateCase(id, name)); caseList = workspace.ListCases(); search.Text = ""; ngOnly.Checked = false; FilterCases(); tabs.SelectedIndex = 0;
+    }
+    private void RenameCase()
+    {
+        if (exporting) return;
+        NeedCase();
+        string? name = Ui.Prompt(this, current!.Data.Id + " — 名前を変更", "用例名", title.Text);
+        if (name == null) return;
+        name = name.Trim();
+        if (name.Length == 0) throw new InvalidOperationException("用例名を入力してください。");
+        title.Text = name; MarkDirty(); Save();
+        // Keep the renamed case visible if the old-name search no longer matches.
+        bool clearedSearch = search.Text.Length > 0 && !(current!.Data.Id + " " + current.Data.Title).Contains(search.Text, StringComparison.CurrentCultureIgnoreCase);
+        if (clearedSearch) search.Clear();
+        status.Text = "用例名を変更して保存しました。" + (clearedSearch ? "旧名の検索条件を解除しました。" : "");
     }
     private void ProjectSettings()
     {

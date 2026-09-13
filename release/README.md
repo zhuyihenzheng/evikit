@@ -2,7 +2,7 @@
 
 このディレクトリは、ブラウザを使用しない Windows Forms 版を Git だけで取得するための配布物です。
 
-現在の配布版：**v0.3.0-native-alpha**。1 件に複数画像、既存画像エビデンスの統合、連続撮影の同じ行への追加、動画添付、Step ごとのテスト条件を含みます。[同じ ZIP の GitHub Release](https://github.com/zhuyihenzheng/evikit/releases/tag/v0.3.0-native-alpha)。
+現在の配布版：**v0.3.1-native-alpha**。「名前を変更」/ 一覧の F2 / ダブルクリックによる用例名変更を追加。1 件に複数画像、既存画像エビデンスの統合、連続撮影の同じ行への追加、動画添付、Step ごとのテスト条件を含みます。[同じ ZIP の GitHub Release](https://github.com/zhuyihenzheng/evikit/releases/tag/v0.3.1-native-alpha)。
 
 ```powershell
 git clone --depth 1 https://github.com/zhuyihenzheng/evikit.git
@@ -20,9 +20,9 @@ Get-FileHash .\evikit-win-x64.zip -Algorithm SHA256
 Get-Content .\SHA256SUMS.txt
 ```
 
-期待値：`2959805478e4bff8473b9944f5f204ff06435fa3afbb6732c52696059f867577`
+期待値：`34c962bcdec5197674721b03aa7de39305425cd23ac59147f1727b81a857daf7`
 
-ソース commit：`f36c004b3458cf1afac10207719aa15af311c77a`。ZIP 内の `BUILD-INFO.txt` にも記録しています。既に clone している場合は `git pull --ff-only` 後、ZIP を新しいフォルダーに展開して使用してください。ユーザーのプロジェクトを上書きする必要はありません。
+ソース commit：`a5cfb9aa674c9bc4b2e6f5967e034801d9dc3c63`。ZIP 内の `BUILD-INFO.txt` にも記録しています。既に clone している場合は `git pull --ff-only` 後、ZIP を新しいフォルダーに展開して使用してください。ユーザーのプロジェクトを上書きする必要はありません。
 
 状態は alpha です。Windows 実機、RDP、IME、DPI、実 Excel の印刷とリンク操作は未検証です。
 

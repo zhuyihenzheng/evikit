@@ -10,9 +10,9 @@
   "steps": [
     {
       "no": 1,
-      "action": "ログイン画面を確認する",
+      "action": "ログイン前後の画面を確認する",
       "condition": "環境：検証環境\n初期状態：未ログイン\n利用者：テスト用アカウント",
-      "expected": "ユーザー ID とパスワード欄が表示される",
+      "expected": "ログイン画面とホーム画面が順番に表示される",
       "actual": "表示を確認",
       "verdict": "OK"
     },
@@ -30,16 +30,38 @@
       "id": "E01",
       "kind": "image",
       "category": "画面",
-      "caption": "ログイン画面",
+      "caption": "ログイン前後の画面確認",
       "step": 1,
-      "file": "E01.png",
+      "file": "",
       "capturedAt": "2026-09-06T09:00:00+09:00",
       "source": "架空のサンプル画面",
-      "note": "",
-      "sha256": "c026b0cce8d436225e6e1258269f491c88bbbe5eae195c18550c998f6a0c526d",
+      "note": "1 件のエビデンスに 2 枚の画像を保存したサンプルです。",
+      "sha256": "",
       "lang": "",
       "originalName": "",
-      "size": 24954
+      "size": 0,
+      "images": [
+        {
+          "caption": "ログイン前",
+          "file": "E01.png",
+          "capturedAt": "2026-09-06T09:00:00+09:00",
+          "source": "架空のサンプル画面",
+          "note": "入力欄が表示されることを確認。",
+          "sha256": "c026b0cce8d436225e6e1258269f491c88bbbe5eae195c18550c998f6a0c526d",
+          "originalName": "",
+          "size": 24954
+        },
+        {
+          "file": "home.png",
+          "caption": "ログイン後のホーム画面",
+          "source": "架空のサンプル画面",
+          "note": "画面遷移後の表示を確認。",
+          "capturedAt": "2026-09-06T09:01:00+09:00",
+          "sha256": "53f60be46e370265ebe1087cb7b8a72a949e56638f114ce57817f74a8de85d11",
+          "size": 45459,
+          "originalName": "home.png"
+        }
+      ]
     },
     {
       "id": "E02",

@@ -16,7 +16,7 @@ Evikit.Windows（仅 Windows）
   EvidenceDialog    四类录入与元数据
   AnnotationForm    GDI+ 注释、原图坐标、PNG 生成
   CaptureSessionForm / ScreenCapture  内置连续截图、全局快捷键、固定区域
-  ImageReviewForm   缩略图、批量说明 / 步骤、排序、标注
+  ImageReviewForm   一条证据内的多张图、追加、独立说明 / 排序 / 标注
         ↓ 直接方法调用
 Evikit.Core（可在 Mac 测试）
   Models / Contract 数据契约、验证、判定
@@ -49,6 +49,12 @@ PNG/JPEG/GIF/BMP 图像可显示和注释；WebP 不支持。导入图像保留�
 
 没有用例删除、批次运行历史、蒙版、SQL 执行、API 调用、云同步或自动更新。真实 Windows 界面与 RDP 测试尚未完成，详见 WINDOWS-ACCEPTANCE.md。
 
-alpha 0.2 的连续截图流程、恢复策略和实现边界见 [CAPTURE-DESIGN.md](CAPTURE-DESIGN.md)。项目 YAML 不新增字段；多张图继续作为独立 image 证据关联到同一步骤。批量整理保持非图片证据和全部图片原始信息。
+alpha 0.3 新增 `Evidence.Images: List<ImageItem>?`。为空时使用旧单文件字段；非空时数组是完整且有序的图片集合，顶层 `file` 为空，禁止混合两种文件来源。顶层 ID / Step / 分类 / 标题 / 说明属于整条证据，每张图独立保留 file / sha256 / capturedAt / source / caption / note / originalFile / annotations。稳定图片标识为 `originalFile ?? file`，排序和标注不会改变它。不增加第五种 kind。
 
-截图本身不改数据契约。后续新增的测试条件使用 Step 可选字段 `condition`；空项目保持兼容，条件随 Step 对象一起保存、排序、删除。Windows UI 新增条件列和多行编辑，Excel 在该步骤主行下方插入跨列条件行，保持原有 6 列宽度、判定位置和图片锚点。共享 TypeScript schema 只做保留 condition 的数据兼容，浏览器界面与导出暂不显示条件。含条件的项目需要新版数据读取器，旧客户端会拒绝未知字段。
+连续截图回收记录保存目的 evidence ID 和新建组标志，第一次截图创建记录，以后逐张追加。重试在所有组内查找原文件；组内删除写 `.trash/native-*/image.json`，遗留回收记录不会复活已删图片。合并只允许同 Step 的 image，保留第一个 ID 和共用元数据，其他说明保存在各图中，废弃 ID 不重用。
+
+`SaveGallery` 验证完整的图片标识集合，只改变顺序与各图标题/说明。原图操作必须指定 image key。导出按组生成一次标题，再处理所有物理图片；每张图都核对现图和原图哈希，附件与 ZIP 包含所有现图。
+
+旧项目无须迁移。创建 images 数组后需要 Desktop 0.3 以上；浏览器 schema 明确拒绝该字段，避免剥离未知字段造成丢图。浏览器 UI 与导出未扩展。历史截图保存策略见 [CAPTURE-DESIGN.md](CAPTURE-DESIGN.md)。
+
+测试条件使用 Step 可选字段 `condition`；空项目保持兼容，条件随 Step 对象一起保存、排序、删除。Windows UI 新增条件列和多行编辑，Excel 在该步骤主行下方插入跨列条件行，保持原有 6 列宽度、判定位置和图片锚点。共享 TypeScript schema 只做保留 condition 的数据兼容，浏览器界面与导出暂不显示条件。含条件的项目需要新版数据读取器，旧客户端会拒绝未知字段。

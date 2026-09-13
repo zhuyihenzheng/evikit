@@ -82,6 +82,9 @@ export type Annotations = z.infer<typeof AnnotationSchema>;
 export type AnnotationShape = Annotations["shapes"][number];
 
 export const EvidenceSchema = z.object({
+  // Native multi-image records have no single physical file. Reject before editing
+  // so a browser save/export cannot silently drop images it does not support.
+  images: z.never({ error: "複数画像のエビデンスは evikit Desktop 0.3 以降で開いてください。" }).optional(),
   id: z.string().regex(/^E\d+$/),
   kind: KindSchema,
   category: CategorySchema,

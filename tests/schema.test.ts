@@ -82,6 +82,15 @@ describe("schema", () => {
     expect(TestCaseSchema.safeParse({ id: "TC-001" }).success).toBe(true);
   });
 
+  test("native image collections are rejected rather than silently stripped", () => {
+    const result = EvidenceSchema.safeParse({
+      id: "E01", kind: "image", category: "画面", file: "cover.png",
+      images: [{ file: "first.png" }, { file: "second.png" }],
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues.some(i => i.message.includes("Desktop 0.3"))).toBe(true);
+  });
+
   test("§5.2 ID 採番は最大 + 1、欠番は詰めない", () => {
     const ev = (id: string) =>
       EvidenceSchema.parse({

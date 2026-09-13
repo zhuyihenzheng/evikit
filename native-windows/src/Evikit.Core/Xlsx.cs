@@ -80,12 +80,29 @@ public static class Xlsx
                 sheet.Full("取得：" + e.CapturedAt); if (e.Source != "") sheet.Full("出典 / SQL：" + e.Source);
                 if (e.Kind == "image")
                 {
-                    var (width, height, extension) = ImageSize(evidence.Bytes);
+                    int imageIndex = 0;
+                    foreach (var image in evidence.Attachments())
+                    {
+                    imageIndex++;
+                    if (e.Images != null)
+                    {
+                        sheet.Full($"画像 {imageIndex}/{e.Images.Count}　{image.Metadata.Caption}");
+                        sheet.Full("取得：" + image.Metadata.CapturedAt);
+                        if (image.Metadata.Source != "" && image.Metadata.Source != e.Source) sheet.Full("画像の出典：" + image.Metadata.Source);
+                    }
+                    var (width, height, extension) = ImageSize(image.Bytes);
                     double scale = Math.Min(1, Math.Min(snapshot.Project.ImageMaxWidth / (double)width, 1600d / height));
                     int w = Math.Max(1, (int)Math.Round(width * scale)), h = Math.Max(1, (int)Math.Round(height * scale));
-                    sheet.Pictures.Add(new(sheet.Rows.Count, evidence.Bytes, extension, w, h));
+                    sheet.Pictures.Add(new(sheet.Rows.Count, image.Bytes, extension, w, h));
                     int remaining = h + 12;
                     while (remaining > 0) { int pixels = Math.Min(remaining, 400); sheet.Add(pixels * .75, 0, ""); remaining -= pixels; }
+                    if (e.Images != null)
+                    {
+                        if (image.Metadata.Note != "") sheet.Full("画像の確認事項：" + image.Metadata.Note);
+                        int row = sheet.Row("", "画像ファイル：" + (image.Metadata.OriginalName == "" ? image.Metadata.File : image.Metadata.OriginalName));
+                        sheet.Links.Add(($"B{row}", "files/" + Uri.EscapeDataString(c.Id) + "/" + Uri.EscapeDataString(image.Metadata.File), false));
+                    }
+                    }
                 }
                 else if (e.Kind == "table")
                 {
@@ -102,6 +119,7 @@ public static class Xlsx
                 bool video = e.Kind == "file" && Media.IsVideo(e.File);
                 if (video) sheet.Full($"動画 / {Path.GetExtension(e.File).TrimStart('.').ToUpperInvariant()} / {e.Size / 1048576d:N1} MiB — 下のリンクからローカルプレーヤーで開く");
                 if (e.Note != "") sheet.Full("確認事項：" + e.Note);
+                if (e.Images != null) continue;
                 int linkRow = sheet.Row("", (video ? "動画を開く：" : "証拠ファイル：") + (e.OriginalName == "" ? e.File : e.OriginalName));
                 sheet.Links.Add(($"B{linkRow}", "files/" + Uri.EscapeDataString(c.Id) + "/" + Uri.EscapeDataString(e.File), false));
             }

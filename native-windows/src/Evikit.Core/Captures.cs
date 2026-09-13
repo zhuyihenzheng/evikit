@@ -2,7 +2,8 @@ using System.Text.Json;
 
 namespace Evikit.Core;
 
-public sealed record PendingCapture(string Token, string CaseId, int? Step, string Caption, string CapturedAt, byte[] Png)
+public sealed record PendingCapture(string Token, string CaseId, int? Step, string Caption, string CapturedAt, byte[] Png,
+    string? EvidenceId = null, bool GroupImages = false, string? GroupCaption = null)
 {
     public string FileName => $"capture-{Token}.png";
 }
@@ -17,6 +18,7 @@ public sealed class CaptureInbox(Workspace workspace)
     public static void Validate(PendingCapture capture)
     {
         Contract.Id(capture.CaseId);
+        if (capture.EvidenceId != null && !System.Text.RegularExpressions.Regex.IsMatch(capture.EvidenceId, "^E[0-9]{1,8}$")) throw new InvalidDataException("撮影先のエビデンス ID が不正です。");
         if (!Guid.TryParseExact(capture.Token, "N", out _) || capture.Step is < 1 || capture.Caption == null ||
             !DateTimeOffset.TryParse(capture.CapturedAt, out _)) throw new InvalidDataException("撮影情報が不正です。");
         if (capture.Png == null || capture.Png.Length > 25 * 1024 * 1024 ||
@@ -33,6 +35,7 @@ public sealed class CaptureInbox(Workspace workspace)
         {
             var existing = Read(path);
             if (existing.CaseId != capture.CaseId || existing.Step != capture.Step || existing.Caption != capture.Caption ||
+                existing.EvidenceId != capture.EvidenceId || existing.GroupImages != capture.GroupImages || existing.GroupCaption != capture.GroupCaption ||
                 existing.CapturedAt != capture.CapturedAt || Files.Hash(existing.Png) != Files.Hash(capture.Png))
                 throw new IOException("撮影の回収記録と内容が一致しません。");
             return;

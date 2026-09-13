@@ -10,7 +10,8 @@ public static class Export
         {
             foreach (var c in snapshot.Cases)
                 foreach (var e in c.Evidence)
-                    Files.Atomic(Files.Safe(stage, "files", c.Data.Id, e.Metadata.File), e.Bytes, true);
+                    foreach (var image in e.Attachments())
+                        Files.Atomic(Files.Safe(stage, "files", c.Data.Id, image.Metadata.File), image.Bytes, true);
             return snapshot;
         });
 
@@ -29,7 +30,7 @@ public static class Export
             var snapshot = prepare(stage);
             Xlsx.Write(snapshot, Path.Combine(stage, "report.xlsx"));
             var entries = Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories).Order().Select(path => new { path = Path.GetRelativePath(stage, path).Replace('\\', '/'), size = new FileInfo(path).Length, sha256 = Files.HashFile(path) }).ToArray();
-            File.WriteAllText(Path.Combine(stage, "manifest.json"), JsonSerializer.Serialize(new { generator = "evikit-native/0.2.0-alpha", generatedAt = DateTimeOffset.Now, project = snapshot.Project.Name, files = entries }, Contract.Json));
+            File.WriteAllText(Path.Combine(stage, "manifest.json"), JsonSerializer.Serialize(new { generator = "evikit-native/0.3.0-alpha", generatedAt = DateTimeOffset.Now, project = snapshot.Project.Name, files = entries }, Contract.Json));
             // ZIP created outside the staged directory avoids accidentally including itself.
             string zip = Path.Combine(outputRoot, ".package-" + stamp + ".zip");
             try

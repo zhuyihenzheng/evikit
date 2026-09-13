@@ -13,7 +13,10 @@ public sealed record CaseDocument(TestCase Data, string Revision);
 public sealed record ProjectDocument(Project Data, string Revision);
 public sealed record NewEvidence(string Kind, string Category, string Caption, int? Step, string Source, string Note, string Lang, byte[] Data, string Extension, string OriginalName = "", string? SourcePath = null);
 public sealed record ArchivedEvidence(string CaseId, Evidence Evidence);
-public sealed record EvidenceSnapshot(Evidence Metadata, byte[] Bytes);
+public sealed record EvidenceSnapshot(Evidence Metadata, byte[] Bytes, List<ImageSnapshot>? Images = null)
+{
+    public IEnumerable<ImageSnapshot> Attachments() => Images ?? (IEnumerable<ImageSnapshot>)[new(Metadata, Bytes)];
+}
 public sealed record CaseSnapshot(TestCase Data, List<EvidenceSnapshot> Evidence);
 public sealed record ProjectSnapshot(Project Project, List<CaseSnapshot> Cases);
 
@@ -119,7 +122,7 @@ public static class Yaml
     }
 }
 
-public sealed class Workspace : IDisposable
+public sealed partial class Workspace : IDisposable
 {
     public string Root { get; }
     private readonly string lockPath;
@@ -208,23 +211,23 @@ public sealed class Workspace : IDisposable
             Files.Atomic(path, Yaml.Write(doc.Data)); return LoadCase(doc.Data.Id);
         }
     }
-    public string EvidencePath(string caseId, Evidence e, bool original = false)
+    public string EvidencePath(string caseId, ImageItem e, bool original = false)
     {
         Contract.Id(caseId); var file = original ? e.OriginalFile ?? e.File : e.File; Contract.FileName(file);
         return Files.Safe(Root, "evidence", caseId, file);
     }
-    public void VerifyEvidence(string caseId, Evidence e, bool original = false)
+    public void VerifyEvidence(string caseId, ImageItem e, bool original = false)
     {
         string path = EvidencePath(caseId, e, original);
-        if (new FileInfo(path).Length > (e.Kind == "file" ? Media.MaxFileBytes : Media.MaxInlineBytes)) throw new InvalidDataException("証拠ファイルがサイズ上限を超えています。");
+        if (new FileInfo(path).Length > (e is Evidence { Kind: "file" } ? Media.MaxFileBytes : Media.MaxInlineBytes)) throw new InvalidDataException("証拠ファイルがサイズ上限を超えています。");
         var expected = original ? e.OriginalSha256 ?? e.Sha256 : e.Sha256;
         if (Files.HashFile(path) != expected && !string.IsNullOrEmpty(expected)) throw new InvalidDataException($"{caseId}/{e.File}: SHA-256 が一致しません。証拠が変更されています。");
     }
-    public void CopyEvidence(string caseId, Evidence e, string destination, bool createOnly = true)
+    public void CopyEvidence(string caseId, ImageItem e, string destination, bool createOnly = true)
     {
-        Files.CopyAtomic(EvidencePath(caseId, e), destination, e.Kind == "file" ? Media.MaxFileBytes : Media.MaxInlineBytes, e.Sha256, createOnly);
+        Files.CopyAtomic(EvidencePath(caseId, e), destination, e is Evidence { Kind: "file" } ? Media.MaxFileBytes : Media.MaxInlineBytes, e.Sha256, createOnly);
     }
-    public byte[] ReadEvidence(string caseId, Evidence e, bool original = false)
+    public byte[] ReadEvidence(string caseId, ImageItem e, bool original = false)
     {
         string path = EvidencePath(caseId, e, original);
         if (new FileInfo(path).Length > Media.MaxInlineBytes) throw new InvalidDataException("大きい添付は「証拠を保存」または成果物の出力で取り出してください。");
@@ -278,10 +281,10 @@ public sealed class Workspace : IDisposable
             if (doc.Data.Id != capture.CaseId) throw new InvalidDataException("撮影先の用例が一致しません。");
             CheckRevision(CasePath(doc.Data.Id), doc.Revision);
             var c = Contract.Clone(doc.Data);
-            var existing = c.Evidence.FirstOrDefault(e => (e.OriginalFile ?? e.File) == capture.FileName);
+            var existing = c.Evidence.SelectMany(ImageGroups.Items).FirstOrDefault(e => ImageGroups.Key(e) == capture.FileName);
             if (existing != null)
             {
-                if (existing.Kind != "image" || Files.Hash(ReadEvidence(c.Id, existing, true)) != Files.Hash(capture.Png))
+                if (Files.Hash(ReadEvidence(c.Id, existing, true)) != Files.Hash(capture.Png))
                     throw new IOException("保存済みの撮影と回収画像が一致しません。");
                 return doc;
             }
@@ -295,16 +298,35 @@ public sealed class Workspace : IDisposable
                     foreach (var directory in Directory.EnumerateDirectories(trash, "native-*"))
                     {
                         var recordPath = Files.Safe(Root, ".trash", Path.GetFileName(directory), "evidence.json");
-                        if (!File.Exists(recordPath)) continue;
-                        var archived = JsonSerializer.Deserialize<ArchivedEvidence>(File.ReadAllBytes(recordPath), Contract.Json);
-                        if (archived?.CaseId == c.Id && (archived.Evidence.OriginalFile ?? archived.Evidence.File) == capture.FileName) return doc;
+                        if (File.Exists(recordPath))
+                        {
+                            var archived = JsonSerializer.Deserialize<ArchivedEvidence>(File.ReadAllBytes(recordPath), Contract.Json);
+                            if (archived?.CaseId == c.Id && ImageGroups.Items(archived.Evidence).Any(i => ImageGroups.Key(i) == capture.FileName)) return doc;
+                        }
+                        var imageRecord = Files.Safe(Root, ".trash", Path.GetFileName(directory), "image.json");
+                        if (File.Exists(imageRecord))
+                        {
+                            var archived = JsonSerializer.Deserialize<ArchivedImage>(File.ReadAllBytes(imageRecord), Contract.Json);
+                            if (archived?.CaseId == c.Id && ImageGroups.Key(archived.Image) == capture.FileName) return doc;
+                        }
                     }
             }
             var next = Math.Max(c.NextEvidenceNumber ?? 1, c.Evidence.Select(e => int.Parse(e.Id[1..])).DefaultIfEmpty(0).Max() + 1);
-            c.Evidence.Add(new Evidence { Id = $"E{next:00}", Kind = "image", Category = "画面", Caption = capture.Caption,
+            var added = new Evidence { Id = $"E{next:00}", Kind = "image", Category = "画面", Caption = capture.Caption,
                 Step = capture.Step, File = capture.FileName, CapturedAt = capture.CapturedAt,
-                Source = "evikit 連続スクリーンショット", Size = capture.Png.Length, Sha256 = Files.Hash(capture.Png) });
-            c.NextEvidenceNumber = next + 1; Contract.Validate(c);
+                Source = "evikit 連続スクリーンショット", Size = capture.Png.Length, Sha256 = Files.Hash(capture.Png) };
+            if (capture.EvidenceId != null)
+            {
+                var target = c.Evidence.SingleOrDefault(e => e.Id == capture.EvidenceId) ?? throw new InvalidOperationException("撮影先のエビデンスがありません。画像を退避してから追加してください。");
+                if (target.Step != capture.Step) throw new InvalidOperationException("撮影先の Step が変わりました。画像を退避してから追加してください。");
+                ImageGroups.Promote(target).Add(Contract.Clone<ImageItem>(added));
+            }
+            else
+            {
+                if (capture.GroupImages) { ImageGroups.Promote(added); added.Caption = capture.GroupCaption ?? "スクリーンショット"; }
+                c.Evidence.Add(added); c.NextEvidenceNumber = next + 1;
+            }
+            Contract.Validate(c);
             if (!File.Exists(path)) Files.Atomic(path, capture.Png, true);
             return SaveCase(new(c, doc.Revision));
         }
@@ -347,19 +369,22 @@ public sealed class Workspace : IDisposable
             var saved = JsonSerializer.Deserialize<ArchivedEvidence>(File.ReadAllBytes(Files.Safe(Root, ".trash", "native-" + archive, "evidence.json")), Contract.Json)!;
             var doc = LoadCase(saved.CaseId); var e = saved.Evidence;
             if (doc.Data.Evidence.Any(item => item.Id == e.Id)) throw new IOException("同じ証拠 ID が既に存在します。");
-            VerifyEvidence(saved.CaseId, e);
+            foreach (var item in ImageGroups.Items(e))
+            {
+                VerifyEvidence(saved.CaseId, item);
+                if (item.OriginalFile != null) VerifyEvidence(saved.CaseId, item, true);
+            }
             if (e.Step != null && !doc.Data.Steps.Any(s => s.No == e.Step)) e.Step = null;
             doc.Data.Evidence.Add(e); return SaveCase(doc);
         }
     }
-    public CaseDocument SaveAnnotation(CaseDocument doc, string id, byte[] png, Annotations annotation)
+    public CaseDocument SaveAnnotation(CaseDocument doc, string id, byte[] png, Annotations annotation, string? imageKey = null)
     {
         lock (gate)
         {
             CheckRevision(CasePath(doc.Data.Id), doc.Revision);
             if (png.Length > 25 * 1024 * 1024 || !png.AsSpan().StartsWith(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 })) throw new InvalidDataException("注釈画像は 25 MiB 以下の PNG が必要です。");
-            var c = Contract.Clone(doc.Data); var e = c.Evidence.Single(e => e.Id == id);
-            if (e.Kind != "image") throw new InvalidDataException("画像以外には注釈を付けられません。");
+            var c = Contract.Clone(doc.Data); var e = ImageGroups.Select(c.Evidence.Single(e => e.Id == id), imageKey);
             var original = ReadEvidence(c.Id, e, true);
             e.OriginalFile ??= e.File; e.OriginalSha256 ??= Files.Hash(original);
             e.File = $"{id}.annotated-{Guid.NewGuid():N}.png"; e.Sha256 = Files.Hash(png); e.Size = png.Length; e.Annotations = annotation;
@@ -367,9 +392,9 @@ public sealed class Workspace : IDisposable
             return SaveCase(new(c, doc.Revision));
         }
     }
-    public CaseDocument ResetAnnotation(CaseDocument doc, string id)
+    public CaseDocument ResetAnnotation(CaseDocument doc, string id, string? imageKey = null)
     {
-        var c = Contract.Clone(doc.Data); var e = c.Evidence.Single(e => e.Id == id);
+        var c = Contract.Clone(doc.Data); var e = ImageGroups.Select(c.Evidence.Single(e => e.Id == id), imageKey);
         var original = ReadEvidence(c.Id, e, true); e.File = e.OriginalFile ?? e.File; e.Sha256 = Files.Hash(original); e.Size = original.Length;
         e.OriginalFile = null; e.OriginalSha256 = null; e.Annotations = null; return SaveCase(new(c, doc.Revision));
     }
@@ -382,6 +407,18 @@ public sealed class Workspace : IDisposable
             var project = LoadProject(); var cases = ListCases();
             var result = new ProjectSnapshot(project.Data, cases.Select(c => new CaseSnapshot(c.Data, c.Data.Evidence.Select(e =>
             {
+                if (e.Images != null)
+                {
+                    var images = e.Images.Select(image =>
+                    {
+                        if (image.OriginalFile != null) VerifyEvidence(c.Data.Id, image, true);
+                        if (attachmentRoot == null) return new ImageSnapshot(image, ReadEvidence(c.Data.Id, image));
+                        string file = Files.Safe(attachmentRoot, c.Data.Id, image.File);
+                        CopyEvidence(c.Data.Id, image, file);
+                        return new ImageSnapshot(image, File.ReadAllBytes(file));
+                    }).ToList();
+                    return new EvidenceSnapshot(e, [], images);
+                }
                 if (e.OriginalFile != null) VerifyEvidence(c.Data.Id, e, true);
                 if (attachmentRoot == null) return new EvidenceSnapshot(e, ReadEvidence(c.Data.Id, e));
                 string destination = Files.Safe(attachmentRoot, c.Data.Id, e.File);

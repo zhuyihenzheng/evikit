@@ -36,13 +36,10 @@ public sealed class Step
     public string Actual { get; set; } = "";
     public string Verdict { get; set; } = "";
 }
-public sealed class Evidence
+// A physical image keeps its own origin, hash, annotations and optional description.
+public class ImageItem
 {
-    public string Id { get; set; } = "";
-    public string Kind { get; set; } = "text";
-    public string Category { get; set; } = "その他";
     public string Caption { get; set; } = "";
-    public int? Step { get; set; }
     public string File { get; set; } = "";
     public string? OriginalFile { get; set; }
     public string? OriginalSha256 { get; set; }
@@ -51,9 +48,20 @@ public sealed class Evidence
     public string Source { get; set; } = "";
     public string Note { get; set; } = "";
     public string Sha256 { get; set; } = "";
-    public string Lang { get; set; } = "";
     public string OriginalName { get; set; } = "";
     public long Size { get; set; }
+}
+public sealed class Evidence : ImageItem
+{
+    public string Id { get; set; } = "";
+    public string Kind { get; set; } = "text";
+    public string Category { get; set; } = "その他";
+    public int? Step { get; set; }
+    public string Lang { get; set; } = "";
+    // Null = legacy single file. Non-null = the complete, ordered image collection.
+    public List<ImageItem>? Images { get; set; }
+    [JsonIgnore, YamlDotNet.Serialization.YamlIgnore]
+    public int ImageCount => Kind == "image" ? Images?.Count ?? 1 : 0;
 }
 public sealed class Annotations
 {
@@ -111,12 +119,30 @@ public static class Contract
         foreach (var s in c.Steps) { s.Action ??= ""; s.Expected ??= ""; s.Actual ??= ""; s.Verdict ??= ""; }
         foreach (var e in c.Evidence)
         {
-            FileName(e.File); if (e.OriginalFile != null) FileName(e.OriginalFile);
-            e.Caption ??= ""; e.Source ??= ""; e.Note ??= ""; e.CapturedAt ??= ""; e.Sha256 ??= ""; e.Lang ??= ""; e.OriginalName ??= "";
+            e.Lang ??= "";
             if (!Regex.IsMatch(e.Id, "^E[0-9]{1,8}$") || !new[] { "image", "table", "text", "file" }.Contains(e.Kind) || !Categories.Contains(e.Category) || (e.Step != null && !c.Steps.Any(s => s.No == e.Step)))
                 throw new InvalidDataException($"{e.Id}: 証拠種別・分類・ステップ参照が不正です。");
-            if (!new[] { "", "log", "json", "xml", "sql", "plain" }.Contains(e.Lang) || e.Size < 0 || (e.Sha256 != "" && !Regex.IsMatch(e.Sha256, "^[a-f0-9]{64}$")))
+            if (!new[] { "", "log", "json", "xml", "sql", "plain" }.Contains(e.Lang))
                 throw new InvalidDataException($"{e.Id}: 証拠メタデータが不正です。");
+            if (e.Images != null)
+            {
+                if (e.Kind != "image" || e.Images.Count == 0 || e.Images.Any(i => i == null) || e.File != "" || e.OriginalFile != null || e.Annotations != null)
+                    throw new InvalidDataException($"{e.Id}: 画像コレクションが不正です。");
+                if (e.Images.Select(ImageGroups.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count() != e.Images.Count ||
+                    e.Images.Select(i => i.File).Distinct(StringComparer.OrdinalIgnoreCase).Count() != e.Images.Count)
+                    throw new InvalidDataException($"{e.Id}: 画像ファイルが重複しています。");
+                ValidateItem(e, false);
+                foreach (var item in e.Images) ValidateItem(item);
+            }
+            else ValidateItem(e);
+        }
+        if (c.NextEvidenceNumber is < 1) throw new InvalidDataException("証拠採番が不正です。");
+    }
+    private static void ValidateItem(ImageItem e, bool physicalFile = true)
+    {
+            if (physicalFile) FileName(e.File); if (e.OriginalFile != null) FileName(e.OriginalFile);
+            e.Caption ??= ""; e.Source ??= ""; e.Note ??= ""; e.CapturedAt ??= ""; e.Sha256 ??= ""; e.OriginalName ??= "";
+            if (e.Size < 0 || (e.Sha256 != "" && !Regex.IsMatch(e.Sha256, "^[a-f0-9]{64}$"))) throw new InvalidDataException("証拠メタデータが不正です。");
             if (e.OriginalSha256 != null && !Regex.IsMatch(e.OriginalSha256, "^[a-f0-9]{64}$")) throw new InvalidDataException("原図ハッシュが不正です。");
             if (e.Annotations is { } a)
             {
@@ -126,8 +152,6 @@ public static class Contract
                 foreach (var s in a.Shapes)
                     if (!Coord(s.X) || !Coord(s.Y) || !new[] { "red", "blue", "yellow" }.Contains(s.Color) || !(s.Type switch { "rect" => s.W is { } w && Coord(w) && s.H is { } h && Coord(h), "arrow" => s.X2 is { } x && Coord(x) && s.Y2 is { } y && Coord(y), "number" => s.N is >= 1 and <= 999, "text" => s.Text != null && s.Text.Length <= 1000, _ => false })) throw new InvalidDataException("画像注釈が不正です。");
             }
-        }
-        if (c.NextEvidenceNumber is < 1) throw new InvalidDataException("証拠採番が不正です。");
     }
     public static string Verdict(TestCase c)
     {

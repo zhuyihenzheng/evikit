@@ -8,23 +8,27 @@ internal sealed class CaptureSessionForm : Form
     private readonly CaptureInbox inbox;
     private readonly ComboBox step = new() { Width = 330, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox shortcuts = new() { Width = 275, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox destination = new() { Width = 300, DropDownStyle = ComboBoxStyle.DropDownList, DisplayMember = "Label" };
+    private readonly TextBox groupCaption = new() { Width = 240, Text = "画面操作の確認" };
     private readonly Label state = new() { AutoSize = false, Dock = DockStyle.Fill, Padding = new(10), ForeColor = Ui.Green };
     private readonly Button capture, repeat, pause, retry, recover, rescue;
-    private readonly FlowLayoutPanel targetBar, captureBar;
+    private readonly FlowLayoutPanel targetBar, captureBar, groupBar;
     private PendingCapture? pending;
     private Rectangle? lastRegion, lastDesktop;
     private bool busy, paused, ready;
     private int savedCount;
     public CaseDocument Document { get; private set; }
+    public string? LastEvidenceId { get; private set; }
     private sealed record StepChoice(int? No, string Label);
+    private sealed record EvidenceChoice(string? Id, string Label);
     private sealed record HotKeys(string Label, uint Modifiers, Keys Region, Keys Repeat);
 
-    public CaptureSessionForm(Workspace workspace, CaseDocument document, int? initialStep)
+    public CaptureSessionForm(Workspace workspace, CaseDocument document, int? initialStep, string? initialEvidence = null)
     {
         this.workspace = workspace; inbox = new(workspace); Document = document;
         Text = $"{document.Data.Id} — 連続スクリーンショット";
         Font = SystemFonts.MessageBoxFont; AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new(770, 300); MinimumSize = new(720, 330); StartPosition = FormStartPosition.CenterScreen;
+        ClientSize = new(840, 370); MinimumSize = new(780, 400); StartPosition = FormStartPosition.CenterScreen;
         TopMost = true; MaximizeBox = false; BackColor = Ui.Background;
         step.DisplayMember = "Label"; step.Items.Add(new StepChoice(null, "共通（後でステップを指定）"));
         foreach (var s in document.Data.Steps) step.Items.Add(new StepChoice(s.No, $"Step {s.No}  {s.Action}"));
@@ -36,6 +40,15 @@ internal sealed class CaptureSessionForm : Form
         shortcuts.SelectedIndex = 0;
         targetBar = Ui.Bar(new Label { Text = "保存先：" + document.Data.Id, AutoSize = true, Padding = new(4, 7, 0, 0) }, step,
             Ui.Button("次の Step →", () => { if (step.SelectedIndex + 1 < step.Items.Count) step.SelectedIndex++; }));
+        groupBar = Ui.Bar(destination, groupCaption, Ui.Button("新しいエビデンス", () => { destination.SelectedIndex = 0; groupCaption.Text = "画面操作の確認"; }));
+        step.SelectedIndexChanged += (_, _) => RefreshDestinations();
+        destination.SelectedIndexChanged += (_, _) =>
+        {
+            string? id = (destination.SelectedItem as EvidenceChoice)?.Id;
+            groupCaption.Enabled = id == null;
+            if (id != null) groupCaption.Text = Document.Data.Evidence.Single(e => e.Id == id).Caption;
+        };
+        RefreshDestinations(initialEvidence);
         capture = Ui.Button("範囲を撮影", () => _ = TakeAsync(false), true);
         repeat = Ui.Button("同じ範囲を撮影", () => _ = TakeAsync(true));
         pause = Ui.Button("一時停止", TogglePause);
@@ -46,13 +59,13 @@ internal sealed class CaptureSessionForm : Form
         rescue = Ui.Button("未保存画像を書き出す…", Rescue);
         var recoveryBar = Ui.Bar(retry, recover, rescue); recoveryBar.Dock = DockStyle.Bottom;
         var header = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
-        header.Controls.Add(targetBar); header.Controls.Add(captureBar); header.Controls.Add(shortcutBar);
+        header.Controls.Add(targetBar); header.Controls.Add(groupBar); header.Controls.Add(captureBar); header.Controls.Add(shortcutBar);
         Controls.Add(state); Controls.Add(header); Controls.Add(recoveryBar);
         shortcuts.SelectedIndexChanged += (_, _) => { if (ready) RegisterKeys(); };
         Shown += (_, _) =>
         {
             ready = true; RegisterKeys();
-            try { var n = inbox.PendingTokens(Document.Data.Id).Count; SetState(n == 0 ? "撮影待機中。画像は 1 枚ずつ自動保存されます。" : $"未完了の撮影が {n} 件あります。「回収」で保存を再開できます。"); }
+            try { var n = inbox.PendingTokens(Document.Data.Id).Count; SetState(n == 0 ? "撮影待機中。同じエビデンスに画像を順番に追加・自動保存します。" : $"未完了の撮影が {n} 件あります。「回収」で保存を再開できます。"); }
             catch (Exception ex) { SetState(ex.Message, true); }
             UpdateButtons();
         };
@@ -69,6 +82,16 @@ internal sealed class CaptureSessionForm : Form
         UpdateButtons();
     }
 
+    private void RefreshDestinations(string? selected = null)
+    {
+        int? stepNo = ((StepChoice)step.SelectedItem!).No;
+        destination.Items.Clear(); destination.Items.Add(new EvidenceChoice(null, "＋ 新規（最初の撮影で作成）"));
+        foreach (var e in Document.Data.Evidence.Where(e => e.Kind == "image" && e.Step == stepNo))
+            destination.Items.Add(new EvidenceChoice(e.Id, $"{e.Id}  {e.Caption}  / {e.ImageCount} 枚"));
+        destination.SelectedIndex = 0;
+        for (int i = 1; i < destination.Items.Count; i++) if (((EvidenceChoice)destination.Items[i]!).Id == selected) destination.SelectedIndex = i;
+    }
+
     private void SetState(string message, bool error = false)
     {
         state.ForeColor = error ? Color.Firebrick : Ui.Green;
@@ -79,7 +102,7 @@ internal sealed class CaptureSessionForm : Form
     {
         capture.Enabled = repeat.Enabled = !busy && !paused && pending == null;
         repeat.Enabled &= lastRegion.HasValue;
-        targetBar.Enabled = shortcuts.Enabled = pause.Enabled = !busy && pending == null;
+        targetBar.Enabled = groupBar.Enabled = shortcuts.Enabled = pause.Enabled = !busy && pending == null;
         retry.Enabled = rescue.Enabled = !busy && pending != null;
         recover.Enabled = !busy && pending == null;
         pause.Text = paused ? "撮影を再開" : "一時停止";
@@ -122,6 +145,8 @@ internal sealed class CaptureSessionForm : Form
         busy = true; UpdateButtons();
         // Freeze the destination before hiding the toolbar or awaiting anything.
         int? target = ((StepChoice)step.SelectedItem!).No;
+        string? evidenceId = ((EvidenceChoice)destination.SelectedItem!).Id;
+        string caption = groupCaption.Text;
         try
         {
             var desktopBounds = SystemInformation.VirtualScreen;
@@ -144,7 +169,7 @@ internal sealed class CaptureSessionForm : Form
                 using var cropped = desktop.Clone(selection.Selection, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
                 png = Ui.Png(cropped);
             }
-            pending = new(Guid.NewGuid().ToString("N"), Document.Data.Id, target, $"スクリーンショット {savedCount + 1:000}", timestamp, png);
+            pending = new(Guid.NewGuid().ToString("N"), Document.Data.Id, target, $"スクリーンショット {savedCount + 1:000}", timestamp, png, evidenceId, true, caption);
             Show(); SetState("画像を保存しています…");
             await CommitPendingAsync();
         }
@@ -157,10 +182,14 @@ internal sealed class CaptureSessionForm : Form
         var image = pending ?? throw new InvalidOperationException("未保存の画像はありません。");
         var saved = await Task.Run(() => inbox.Commit(workspace.LoadCase(Document.Data.Id), image));
         Document = saved; pending = null;
-        var evidence = saved.Data.Evidence.SingleOrDefault(e => (e.OriginalFile ?? e.File) == image.FileName);
+        var evidence = saved.Data.Evidence.SingleOrDefault(e => ImageGroups.Items(e).Any(i => ImageGroups.Key(i) == image.FileName));
         if (evidence == null) { SetState("削除済みの撮影の回収記録を整理しました。画像は再追加していません。"); return; }
         savedCount++;
-        SetState($"{evidence.Id} を保存しました。{(evidence.Step == null ? "共通" : "Step " + evidence.Step)} / 説明は終了後にまとめて入力できます。");
+        LastEvidenceId = evidence.Id;
+        // Recovery can target a different step; keep the next capture visibly attached to that same record.
+        for (int i = 0; i < step.Items.Count; i++) if (((StepChoice)step.Items[i]!).No == evidence.Step) step.SelectedIndex = i;
+        RefreshDestinations(evidence.Id);
+        SetState($"{evidence.Id} に追加しました（合計 {evidence.ImageCount} 枚）。説明は終了後にまとめて入力できます。");
     }
     private async Task RetryAsync()
     {

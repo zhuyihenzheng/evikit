@@ -158,6 +158,7 @@ try
     CaptureChecks.Run(root, Check);
     VideoChecks.Run(root, Check);
     ConditionChecks.Run(root, Check);
+    ImageGroupChecks.Run(root, Check);
     Console.WriteLine($"{passed} checks passed. Artifacts: {root}");
 }
 catch (Exception ex) { Console.Error.WriteLine(ex); Console.Error.WriteLine("Failure artifacts: " + root); Environment.ExitCode = 1; }

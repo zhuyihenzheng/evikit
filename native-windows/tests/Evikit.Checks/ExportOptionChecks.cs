@@ -49,7 +49,10 @@ internal static class ExportOptionChecks
             doc = w.SaveCase(doc);
             var snapshot = w.Snapshot();
             string originalSnapshot = JsonSerializer.Serialize(snapshot, Contract.Json);
-            var originalFiles = Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).ToDictionary(f => f, Files.HashFile);
+            // The live editor lock is process state, not evidence; Windows denies a
+            // second incompatible file handle while the workspace owns that lock.
+            var originalFiles = Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)
+                .Where(f => Path.GetFileName(f) != ".evikit.lock").ToDictionary(f => f, Files.HashFile);
             string outputRoot = Path.Combine(root, "export-options-output");
             string Deliver(ExportOptions options)
             {
@@ -153,7 +156,7 @@ internal static class ExportOptionChecks
                 w.SaveExportOptions(minimal); w.Dispose(); w = new Workspace(path); Assert(w.LoadExportOptions() == minimal);
                 Assert(File.Exists(Path.Combine(path, ".evikit", "export-options.json")));
                 string otherPath = Path.Combine(root, "other-export-options"); Workspace.Create(otherPath, "別プロジェクト"); using var other = new Workspace(otherPath); Assert(other.LoadExportOptions() == new ExportOptions());
-                foreach (var file in originalFiles.Where(f => !f.Key.EndsWith(".evikit.lock"))) Assert(Files.HashFile(file.Key) == file.Value);
+                foreach (var file in originalFiles) Assert(Files.HashFile(file.Key) == file.Value);
             });
             check("malformed or unknown output preferences stop instead of silently exporting hidden fields", () =>
             {

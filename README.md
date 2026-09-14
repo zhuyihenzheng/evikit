@@ -15,7 +15,7 @@
 | 利用者による追加インストール | 配布 ZIP は .NET ランタイム同梱 | Bun と npm パッケージの取得が必要 |
 | ブラウザ・WebView2・Bun | 使用しない | Bun + ブラウザを使用 |
 | 出力 | Excel / 添付 / manifest / ZIP。HTML なし | Excel / 単一 HTML / 添付 / manifest / ZIP |
-| 現在の状態 | 0.4 alpha、用例削除・復元・複数画像・連続撮影・動画添付、Windows ビルド検証済み | 0.2 alpha、Mac の実ブラウザで一連の操作を確認済み |
+| 現在の状態 | 0.5 alpha、選択出力・用例削除・復元・複数画像・連続撮影・動画添付、Windows ビルド検証済み | 0.2 alpha、Mac の実ブラウザで一連の操作を確認済み |
 
 ブラウザ禁止の Windows リモートデスクトップには、Windows デスクトップ版が対象です。アプリの実行可否には会社の許可ポリシーが適用されます。
 
@@ -35,6 +35,7 @@ Expand-Archive .\evikit-win-x64.zip -DestinationPath .\evikit
 **EXE だけを取り出さず、展開したフォルダー全体を保持してください。** Bun / .NET / WebView2 / Excel 本体の追加インストールは不要です。Excel 本体は、生成した Excel を閲覧・印刷する場合に使用します。
 
 - `Ctrl+S`：保存。
+- 「成果物を出力」で画像・動画・その他の添付、日付 / 取得日時・担当者・環境・条件・備考・出典 / SQL の出力を選択。プロジェクトごとに記憶し、元データを保持します。詳しくは [出力設定](native-windows/README.md#出力する項目の選択) / [DB・CSV の追加](native-windows/README.md#db-の結果csv-を表のエビデンスにする) を参照。
 - 「用例を削除」で用例全体を復元可能な削除一覧へ移動。「削除した用例」からステップ・画像・動画を含めて復元できます。削除した用例は出力に含まれません。
 - 用例を選び「名前を変更」、一覧で F2、またはダブルクリックで用例名を変更・保存できます。
 - `Ctrl+Shift+V`：クリップボードの画像・テキストを証拠として追加。
@@ -126,7 +127,7 @@ Windows 配布 ZIP の利用にはパッケージ取得は不要です。企業�
 | 対象 | 確認済み | 未確認 / 未実装 |
 | --- | --- | --- |
 | ブラウザ版 | 78 tests、型検査、ビルド、Mac での既存 UI 確認 | Windows サーバー実行、実機スマートフォン |
-| Windows 原生版 | 72 Core checks、x64 ビルド、64 枚画像出力、64 MiB 添付、ステップ条件、Open XML / ExcelJS 検証 | Windows ウィンドウ、RDP、IME、DPI、プレーヤー連携、実 Excel の印刷・クリック |
+| Windows 原生版 | 84 Core checks、x64 ビルド、64 枚画像出力、64 MiB 添付、ステップ条件、Open XML / ExcelJS 検証 | Windows ウィンドウ、RDP、IME、DPI、プレーヤー連携、実 Excel の印刷・クリック |
 | 共通 | 四種証拠、CSV 文字列保持、原図保留、保存競合、納品 ZIP | DB / API 自動採集、Runs、マスキング、Word / PDF |
 
 原生版は WebP / Shift-JIS / 端末表の自動認識に未対応です。用例削除と再起動後の復元一覧に対応します。永久削除は未実装です。両版とも大規模プロジェクト、複数端末同時編集、障害復旧の網羅検証は完了していません。
@@ -141,7 +142,7 @@ Windows 配布 ZIP の利用にはパッケージ取得は不要です。企業�
 # ブラウザ版
 bun run check
 
-# 原生版 Core（.NET SDK 10.0.400 が必要、Mac でも実行可）
+# 原生版 Core（.NET SDK 10.0.401 が必要、Mac でも実行可）
 cd native-windows
 dotnet run --project tests/Evikit.Checks -c Release -- ../examples/reference
 

@@ -23,6 +23,8 @@ public static class Xlsx
         public List<string> Merges { get; } = [];
         public List<(string Cell, string Target, bool Internal)> Links { get; } = [];
         public List<Pic> Pictures { get; } = [];
+        public List<int> Widths { get; init; } = [6, 36, 32, 32, 8, 14];
+        public int FrozenRows { get; set; }
         public int Row(params string[] cells) => Add(30, 0, cells);
         public int Add(double height, int style, params string[] cells)
         {
@@ -42,15 +44,24 @@ public static class Xlsx
         public void Full(string text, int style = 0)
         {
             int n = Add(Math.Max(28, Math.Ceiling((text.Length / 110.0) + text.Count(c => c == '\n')) * 16 + 12), style, text);
-            Merges.Add($"A{n}:F{n}");
+            Merges.Add($"A{n}:{Col(Widths.Count)}{n}");
         }
     }
     private static string Col(int n) { string s = ""; while (n > 0) { n--; s = (char)('A' + n % 26) + s; n /= 26; } return s; }
     private static int VerdictStyle(string v) => v switch { "OK" => 3, "NG" => 4, "保留" => 5, _ => 0 };
-    public static void Write(ProjectSnapshot snapshot, string output)
+    public static void Write(ProjectSnapshot snapshot, string output, ExportOptions? options = null)
     {
-        var summary = new Sheet("サマリ"); summary.Full(snapshot.Project.Name, 1); summary.Full($"担当：{snapshot.Project.Tester}　環境：{snapshot.Project.Env}");
-        summary.Add(28, 2, "No.", "用例", "タイトル", "担当", "判定", "日付");
+        options ??= new(); snapshot = options.Select(snapshot);
+        List<string> headers = ["No.", "用例", "タイトル"]; List<int> widths = [6, 36, 32];
+        if (options.Tester) { headers.Add("担当"); widths.Add(32); }
+        int verdictColumn = headers.Count; headers.Add("判定"); widths.Add(8);
+        if (options.Dates) { headers.Add("日付"); widths.Add(14); }
+        var summary = new Sheet("サマリ") { Widths = widths }; summary.Full(snapshot.Project.Name, 1);
+        List<string> projectInfo = [];
+        if (options.Tester) projectInfo.Add("担当：" + snapshot.Project.Tester);
+        if (options.Environment) projectInfo.Add("環境：" + snapshot.Project.Env);
+        if (projectInfo.Count > 0) summary.Full(string.Join("　", projectInfo));
+        summary.FrozenRows = summary.Add(28, 2, headers.ToArray());
         var sheets = new List<Sheet> { summary }; var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { summary.Name };
         foreach (var item in snapshot.Cases)
         {
@@ -58,26 +69,34 @@ public static class Xlsx
             string baseName = c.Id[..Math.Min(c.Id.Length, 31)], name = baseName; int suffix = 1;
             while (!used.Add(name)) { string tail = "-" + suffix++; name = baseName[..Math.Min(baseName.Length, 31 - tail.Length)] + tail; }
             var sheet = new Sheet(name); sheets.Add(sheet);
-            int sumRow = summary.Row((sheets.Count - 1).ToString(), c.Id, c.Title, c.Tester, Contract.Verdict(c), c.Date);
-            summary.Rows[^1].Elements(S + "c").ElementAt(4).SetAttributeValue("s", VerdictStyle(Contract.Verdict(c)));
+            List<string> values = [(sheets.Count - 1).ToString(), c.Id, c.Title];
+            if (options.Tester) values.Add(c.Tester);
+            values.Add(Contract.Verdict(c)); if (options.Dates) values.Add(c.Date);
+            int sumRow = summary.Row(values.ToArray());
+            summary.Rows[^1].Elements(S + "c").ElementAt(verdictColumn).SetAttributeValue("s", VerdictStyle(Contract.Verdict(c)));
             summary.Links.Add(($"B{sumRow}", $"'{name}'!A1", true));
             sheet.Full($"{c.Id}　{c.Title}", 1);
-            sheet.Full($"判定：{Contract.Verdict(c)}　担当：{c.Tester}　日付：{c.Date}　環境：{c.Env}");
-            sheet.Full("前提条件：" + c.Precondition);
+            List<string> caseInfo = ["判定：" + Contract.Verdict(c)];
+            if (options.Tester) caseInfo.Add("担当：" + c.Tester);
+            if (options.Dates) caseInfo.Add("日付：" + c.Date);
+            if (options.Environment) caseInfo.Add("環境：" + c.Env);
+            sheet.Full(string.Join("　", caseInfo));
+            if (options.Conditions) sheet.Full("前提条件：" + c.Precondition);
             int back = sheet.Row("サマリへ"); sheet.Links.Add(($"A{back}", "'サマリ'!A1", true));
-            sheet.Add(28, 2, "No.", "操作", "期待結果", "実際結果", "判定", "証拠");
+            sheet.FrozenRows = sheet.Add(28, 2, "No.", "操作", "期待結果", "実際結果", "判定", "証拠");
             foreach (var step in c.Steps)
             {
                 double height = Math.Max(42, new[] { step.Action, step.Expected, step.Actual }.Max(t => Math.Ceiling(t.Length / 20.0) + t.Count(ch => ch == '\n')) * 15 + 12);
                 sheet.Add(height, 0, step.No.ToString(), step.Action, step.Expected, step.Actual, step.Verdict, string.Join(", ", c.Evidence.Where(e => e.Step == step.No).Select(e => e.Id)));
                 sheet.Rows[^1].Elements(S + "c").ElementAt(4).SetAttributeValue("s", VerdictStyle(step.Verdict));
-                if (!string.IsNullOrEmpty(step.Condition)) sheet.Full($"ステップ {step.No} / テスト条件：\n{step.Condition}");
+                if (options.Conditions && !string.IsNullOrEmpty(step.Condition)) sheet.Full($"ステップ {step.No} / テスト条件：\n{step.Condition}");
             }
             foreach (var evidence in item.Evidence)
             {
                 var e = evidence.Metadata;
                 sheet.Full($"{e.Id}  [{e.Category}] {e.Caption}　{(e.Step == null ? "共通" : "ステップ " + e.Step)}", 2);
-                sheet.Full("取得：" + e.CapturedAt); if (e.Source != "") sheet.Full("出典 / SQL：" + e.Source);
+                if (options.Dates) sheet.Full("取得：" + e.CapturedAt);
+                if (options.Sources && e.Source != "") sheet.Full("出典 / SQL：" + e.Source);
                 if (e.Kind == "image")
                 {
                     int imageIndex = 0;
@@ -87,8 +106,8 @@ public static class Xlsx
                     if (e.Images != null)
                     {
                         sheet.Full($"画像 {imageIndex}/{e.Images.Count}　{image.Metadata.Caption}");
-                        sheet.Full("取得：" + image.Metadata.CapturedAt);
-                        if (image.Metadata.Source != "" && image.Metadata.Source != e.Source) sheet.Full("画像の出典：" + image.Metadata.Source);
+                        if (options.Dates) sheet.Full("取得：" + image.Metadata.CapturedAt);
+                        if (options.Sources && image.Metadata.Source != "" && image.Metadata.Source != e.Source) sheet.Full("画像の出典：" + image.Metadata.Source);
                     }
                     var (width, height, extension) = ImageSize(image.Bytes);
                     double scale = Math.Min(1, Math.Min(snapshot.Project.ImageMaxWidth / (double)width, 1600d / height));
@@ -98,7 +117,7 @@ public static class Xlsx
                     while (remaining > 0) { int pixels = Math.Min(remaining, 400); sheet.Add(pixels * .75, 0, ""); remaining -= pixels; }
                     if (e.Images != null)
                     {
-                        if (image.Metadata.Note != "") sheet.Full("画像の確認事項：" + image.Metadata.Note);
+                        if (options.Notes && image.Metadata.Note != "") sheet.Full("画像の確認事項：" + image.Metadata.Note);
                         int row = sheet.Row("", "画像ファイル：" + (image.Metadata.OriginalName == "" ? image.Metadata.File : image.Metadata.OriginalName));
                         sheet.Links.Add(($"B{row}", "files/" + Uri.EscapeDataString(c.Id) + "/" + Uri.EscapeDataString(image.Metadata.File), false));
                     }
@@ -118,12 +137,12 @@ public static class Xlsx
                 }
                 bool video = e.Kind == "file" && Media.IsVideo(e.File);
                 if (video) sheet.Full($"動画 / {Path.GetExtension(e.File).TrimStart('.').ToUpperInvariant()} / {e.Size / 1048576d:N1} MiB — 下のリンクからローカルプレーヤーで開く");
-                if (e.Note != "") sheet.Full("確認事項：" + e.Note);
+                if (options.Notes && e.Note != "") sheet.Full("確認事項：" + e.Note);
                 if (e.Images != null) continue;
                 int linkRow = sheet.Row("", (video ? "動画を開く：" : "証拠ファイル：") + (e.OriginalName == "" ? e.File : e.OriginalName));
                 sheet.Links.Add(($"B{linkRow}", "files/" + Uri.EscapeDataString(c.Id) + "/" + Uri.EscapeDataString(e.File), false));
             }
-            sheet.Full("備考：" + c.Note);
+            if (options.Notes) sheet.Full("備考：" + c.Note);
         }
         using var archive = ZipFile.Open(output, ZipArchiveMode.Create);
         void Xml(string path, XElement root) { var entry = archive.CreateEntry(path); using var stream = entry.Open(); new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), root).Save(stream); }
@@ -143,8 +162,8 @@ public static class Xlsx
             Type(sheetPath, "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
             var rels = new XElement(P + "Relationships");
             var root = new XElement(S + "worksheet", new XAttribute(XNamespace.Xmlns + "r", R), new XElement(S + "sheetPr", new XElement(S + "pageSetUpPr", new XAttribute("fitToPage", 1))),
-                new XElement(S + "sheetViews", new XElement(S + "sheetView", new XAttribute("workbookViewId", 0), new XElement(S + "pane", new XAttribute("ySplit", i == 0 ? 3 : 5), new XAttribute("topLeftCell", i == 0 ? "A4" : "A6"), new XAttribute("activePane", "bottomLeft"), new XAttribute("state", "frozen")))),
-                new XElement(S + "cols", new[] { 6, 36, 32, 32, 8, 14 }.Select((w, n) => new XElement(S + "col", new XAttribute("min", n + 1), new XAttribute("max", n + 1), new XAttribute("width", w), new XAttribute("customWidth", 1)))), new XElement(S + "sheetData", sheet.Rows));
+                new XElement(S + "sheetViews", new XElement(S + "sheetView", new XAttribute("workbookViewId", 0), new XElement(S + "pane", new XAttribute("ySplit", sheet.FrozenRows), new XAttribute("topLeftCell", "A" + (sheet.FrozenRows + 1)), new XAttribute("activePane", "bottomLeft"), new XAttribute("state", "frozen")))),
+                new XElement(S + "cols", sheet.Widths.Select((w, n) => new XElement(S + "col", new XAttribute("min", n + 1), new XAttribute("max", n + 1), new XAttribute("width", w), new XAttribute("customWidth", 1)))), new XElement(S + "sheetData", sheet.Rows));
             if (sheet.Merges.Count > 0) root.Add(new XElement(S + "mergeCells", new XAttribute("count", sheet.Merges.Count), sheet.Merges.Select(m => new XElement(S + "mergeCell", new XAttribute("ref", m)))));
             if (sheet.Links.Count > 0)
             {

@@ -38,7 +38,7 @@ YamlDotNet 是唯一直接运行时 NuGet 依赖。Excel 写入器采用 .NET �
 
 证据先写独立文件，再替换 YAML 引用。失败可能留下无引用文件，不覆盖原图。证据元数据保存不会重新认可一个被篡改的哈希。导出和原图编辑会核对已有哈希；旧数据缺少哈希时只能检查存在性，不能追溯证明其未被修改。
 
-桌面 UI 导出调用 `Export.Deliver(workspace, outputRoot)`：在暂存目录分段复制全部附件并计算哈希，构造只含元数据与图片 / 表格 / 文本字节的快照，file 附件不进入内存快照；最后复核 YAML revision。基于这些已复制的数据生成 Excel 和 ZIP，全部成功后改名为完成目录。失败不发布残缺交付物。旧的小文件测试接口 `Snapshot()` 和 `Export.Deliver(snapshot, ...)` 仍保留，不用于大视频。
+桌面 UI 导出调用 `Export.Deliver(workspace, outputRoot, options)`：在暂存目录分段复制本次选择的附件并计算哈希，构造只含元数据与图片 / 表格 / 文本字节的快照，file 附件不进入内存快照；最后复核 YAML revision。基于这些已复制的数据生成 Excel 和 ZIP，全部成功后改名为完成目录。失败不发布残缺交付物。旧的小文件测试接口 `Snapshot()` 和 `Export.Deliver(snapshot, ...)` 仍保留，不用于大视频。
 
 `Media` 通过扩展名识别视频，仍使用 file 证据和「画面」分类。文件路径导入通过 `NewEvidence.SourcePath`（仅调用参数，不写入 YAML），单个 file 上限 2 GiB，按 1 MiB 缓冲复制到唯一文件名；图片维持 25 MiB。SHA-256 校验、文件提取、删除恢复也不整段读取视频。视频 ZIP 条目不做重复压缩。确认画面是普通 image，在 source 文本中记录视频 ID 和时间点，不扩展数据契约。
 
@@ -69,3 +69,12 @@ alpha 0.3 新增 `Evidence.Images: List<ImageItem>?`。为空时使用旧单文�
 恢复先核对回收记录、YAML revision、全部附件与标注原图哈希，拒绝大小写不敏感的 ID 冲突；随后用一次 rename 将 YAML 放回原 `.yaml` / `.yml` 路径，保留原始字节。失败时保留回收内容。恢复列表跨重启有效。UI 异步执行附件校验；正在验证时禁止关闭恢复窗口。
 
 导出仍只读取 cases 下的活动 YAML，不包含删除的用例、附件或回收记录。浏览器 UI 与其回收记录格式未改；桌面版删除的用例需在新版桌面版中恢复。项目不新增必填数据字段。这仍不是跨主机并发事务，也不提供永久清空回收站。
+
+
+## alpha 0.5 可选导出
+
+`ExportOptions` 是不可变的输出设置，默认全部开启。Windows 在导出前显示设置对话框和输出目录选择，两个都确定后才保存草稿和 `.evikit/export-options.json`。这份可选侧文件不改变 project/case YAML 契约。不存在时使用默认值，格式错误或未知字段时停止，不静默退回完整输出。
+
+Workspace 流式暂存先按 image / video-file / other-file 筛选，再读取与验证所选证据。未选中的图片、视频和附件不会被读取或复制，缺失的已排除附件不阻止输出；所选证据仍做哈希和原图验证，最后检查全部 YAML revision。`ExportOptions.Select` 复制用例数据以筛选 Step 证据引用，不改变编辑快照或源文件。内存快照导出与直接 `Xlsx.Write` 也显式接收相同选项。
+
+日期、担当者、环境、条件、备注、出典由 Excel 渲染器控制；摘要列、合并终点、判定样式位置和冻结行随实际版式调整。表和日志正文保留，不做内容脱敏或日期删除。导出时间仍用于目录和 manifest；manifest 记录选项和实际交付文件哈希。客户端侧文件、原 YAML 和回收记录不进入 ZIP。浏览器版没有实现此设置。

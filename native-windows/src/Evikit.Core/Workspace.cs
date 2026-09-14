@@ -398,14 +398,14 @@ public sealed partial class Workspace : IDisposable
         var original = ReadEvidence(c.Id, e, true); e.File = e.OriginalFile ?? e.File; e.Sha256 = Files.Hash(original); e.Size = original.Length;
         e.OriginalFile = null; e.OriginalSha256 = null; e.Annotations = null; return SaveCase(new(c, doc.Revision));
     }
-    public ProjectSnapshot Snapshot() => SnapshotCore(null);
-    internal ProjectSnapshot StageSnapshot(string attachmentRoot) => SnapshotCore(attachmentRoot);
-    private ProjectSnapshot SnapshotCore(string? attachmentRoot)
+    public ProjectSnapshot Snapshot() => SnapshotCore(null, new());
+    internal ProjectSnapshot StageSnapshot(string attachmentRoot, ExportOptions options) => SnapshotCore(attachmentRoot, options);
+    private ProjectSnapshot SnapshotCore(string? attachmentRoot, ExportOptions options)
     {
         lock (gate)
         {
             var project = LoadProject(); var cases = ListCases();
-            var result = new ProjectSnapshot(project.Data, cases.Select(c => new CaseSnapshot(c.Data, c.Data.Evidence.Select(e =>
+            var result = new ProjectSnapshot(project.Data, cases.Select(c => new CaseSnapshot(c.Data, c.Data.Evidence.Where(options.Includes).Select(e =>
             {
                 if (e.Images != null)
                 {
@@ -429,7 +429,7 @@ public sealed partial class Workspace : IDisposable
             }).ToList())).ToList());
             CheckRevision(Files.Safe(Root, "project.yaml"), project.Revision);
             foreach (var c in cases) CheckRevision(CasePath(c.Data.Id), c.Revision);
-            return result;
+            return options.Select(result);
         }
     }
     public void Dispose()

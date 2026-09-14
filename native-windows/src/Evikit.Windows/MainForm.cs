@@ -525,10 +525,18 @@ internal sealed class MainForm : Form
         if (exporting) return;
         try
         {
-            if (workspace == null) throw new InvalidOperationException("プロジェクトを開いてください。"); if (current != null) Save();
+            if (workspace == null) throw new InvalidOperationException("プロジェクトを開いてください。");
+            using var settings = new ExportOptionsForm(workspace.LoadExportOptions());
+            if (settings.ShowDialog(this) != DialogResult.OK) return;
             using var d = new FolderBrowserDialog { Description = "成果物の出力先（新しい日時フォルダーを作成します）", UseDescriptionForTitle = true, SelectedPath = workspace.Root };
             if (d.ShowDialog(this) != DialogResult.OK) return;
-            string result = await RunStorageAsync(() => Export.Deliver(workspace, d.SelectedPath), "Excel・添付・ZIP を出力しています…");
+            if (current != null) Save();
+            var options = settings.Options;
+            string result = await RunStorageAsync(() =>
+            {
+                workspace.SaveExportOptions(options);
+                return Export.Deliver(workspace, d.SelectedPath, options);
+            }, "選択した項目で Excel・添付・ZIP を出力しています…");
             status.Text = "出力完了：" + result;
             // Open only Explorer, never an HTML file or browser.
             if (MessageBox.Show(this, "Excel・添付・ZIP を出力しました。\n\n" + result + "\n\n保存先フォルダーを開きますか？", "出力完了", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)

@@ -20,9 +20,9 @@ Get-FileHash .\evikit-win-x64.zip -Algorithm SHA256
 Get-Content .\SHA256SUMS.txt
 ```
 
-期待値：`58812781d7ee45d20b82399e0a8c37c9e15fff8459fad7cc3989ae91a4a2ea23`
+期待値：`e2b16c48eda5b2b51dc94993d3f511eaa1e0a60756cbb345ac4d31d195154031`
 
-ソース commit：`91a599a34dadb48239d5a430f9d468b815ba80bc`。ZIP 内の `BUILD-INFO.txt` にも記録しています。既に clone している場合は `git pull --ff-only` 後、ZIP を新しいフォルダーに展開して使用してください。ユーザーのプロジェクトを上書きする必要はありません。
+ソース commit：`f48eee2cd310cab1e8ed055fecfe99014e71a709`。ZIP 内の `BUILD-INFO.txt` にも記録しています。既に clone している場合は `git pull --ff-only` 後、ZIP を新しいフォルダーに展開して使用してください。ユーザーのプロジェクトを上書きする必要はありません。
 
 状態は alpha です。Windows 実機、RDP、IME、DPI、実 Excel の印刷とリンク操作は未検証です。
 

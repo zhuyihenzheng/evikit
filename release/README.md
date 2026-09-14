@@ -2,7 +2,7 @@
 
 このディレクトリは、ブラウザを使用しない Windows Forms 版を Git だけで取得するための配布物です。
 
-現在の配布版：**v0.4.0-native-alpha**。「用例を削除」と「削除した用例」からの復元を追加。削除後の用例は出力対象から外れ、画像・動画は保持されます。再起動後も復元できます。用例名変更、1 件に複数画像、既存画像エビデンスの統合、連続撮影の同じ行への追加、動画添付、Step ごとのテスト条件を含みます。[同じ ZIP の GitHub Release](https://github.com/zhuyihenzheng/evikit/releases/tag/v0.4.0-native-alpha)。
+現在の配布版：**v0.5.0-native-alpha**。出力前に画像・動画・その他の添付、実施日 / 取得日時・担当者・環境・条件・備考・出典 / SQL を選択できます。プロジェクトごとに設定を記憶し、元データは保持します。用例削除・復元、名前変更、複数画像、連続撮影、動画添付、テスト条件も含みます。DB / CSV の追加方法は同梱 README に記載。[同じ ZIP の GitHub Release](https://github.com/zhuyihenzheng/evikit/releases/tag/v0.5.0-native-alpha)。
 
 ```powershell
 git clone --depth 1 https://github.com/zhuyihenzheng/evikit.git
@@ -20,10 +20,12 @@ Get-FileHash .\evikit-win-x64.zip -Algorithm SHA256
 Get-Content .\SHA256SUMS.txt
 ```
 
-期待値：`56db53d05cd3ae6fbd4896cc03a0f13fbd80336c1ac93e901991bb3777f070b8`
+期待値：`58812781d7ee45d20b82399e0a8c37c9e15fff8459fad7cc3989ae91a4a2ea23`
 
-ソース commit：`883a7b2d1bd15bb50da72436bb7ab1cba2c8757b`。ZIP 内の `BUILD-INFO.txt` にも記録しています。既に clone している場合は `git pull --ff-only` 後、ZIP を新しいフォルダーに展開して使用してください。ユーザーのプロジェクトを上書きする必要はありません。
+ソース commit：`91a599a34dadb48239d5a430f9d468b815ba80bc`。ZIP 内の `BUILD-INFO.txt` にも記録しています。既に clone している場合は `git pull --ff-only` 後、ZIP を新しいフォルダーに展開して使用してください。ユーザーのプロジェクトを上書きする必要はありません。
 
 状態は alpha です。Windows 実機、RDP、IME、DPI、実 Excel の印刷とリンク操作は未検証です。
 
 複数画像を追加したプロジェクトは Desktop 0.3 以上で使用してください。ブラウザ版と旧クライアントは非対応です。同梱デモの E01 は 2 枚の画像を含みます。
+
+選択出力は Desktop 0.5 以上で行ってください。旧版とブラウザ版は出力設定を適用しません。

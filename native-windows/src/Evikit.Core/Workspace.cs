@@ -398,13 +398,23 @@ public sealed partial class Workspace : IDisposable
         var original = ReadEvidence(c.Id, e, true); e.File = e.OriginalFile ?? e.File; e.Sha256 = Files.Hash(original); e.Size = original.Length;
         e.OriginalFile = null; e.OriginalSha256 = null; e.Annotations = null; return SaveCase(new(c, doc.Revision));
     }
-    public ProjectSnapshot Snapshot() => SnapshotCore(null, new());
-    internal ProjectSnapshot StageSnapshot(string attachmentRoot, ExportOptions options) => SnapshotCore(attachmentRoot, options);
-    private ProjectSnapshot SnapshotCore(string? attachmentRoot, ExportOptions options)
+    public ProjectSnapshot Snapshot() => SnapshotCore(null, new(), null);
+    internal ProjectSnapshot StageSnapshot(string attachmentRoot, ExportOptions options, string? caseId) => SnapshotCore(attachmentRoot, options, caseId);
+    private CaseDocument LoadExportCase(string caseId)
+    {
+        Contract.Id(caseId);
+        // Check only the chosen ID's filenames, without reading unrelated case data.
+        var matches = Directory.EnumerateFiles(Files.Safe(Root, "cases"))
+            .Where(p => Path.GetExtension(p) is ".yaml" or ".yml")
+            .Where(p => Path.GetFileNameWithoutExtension(p).Equals(caseId, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (matches.Length != 1) throw new InvalidDataException("出力する用例が存在しないか、ID / .yaml / .yml が重複しています。用例を選び直してください。");
+        return LoadCase(caseId);
+    }
+    private ProjectSnapshot SnapshotCore(string? attachmentRoot, ExportOptions options, string? caseId)
     {
         lock (gate)
         {
-            var project = LoadProject(); var cases = ListCases();
+            var project = LoadProject(); List<CaseDocument> cases = caseId == null ? ListCases() : [LoadExportCase(caseId)];
             var result = new ProjectSnapshot(project.Data, cases.Select(c => new CaseSnapshot(c.Data, c.Data.Evidence.Where(options.Includes).Select(e =>
             {
                 if (e.Images != null)

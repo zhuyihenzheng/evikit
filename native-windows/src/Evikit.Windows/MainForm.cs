@@ -36,7 +36,7 @@ internal sealed class MainForm : Form
         renameCase = Ui.Button("名前を変更", RenameCase); renameCase.Enabled = false;
         deleteCase = Ui.Button("用例を削除", DeleteCurrentCase); deleteCase.Enabled = false;
         deletedCases = Ui.Button("削除した用例", ShowDeletedCases); deletedCases.Enabled = false;
-        var newCase = Ui.Bar(Ui.Button("＋ 用例を追加", AddCase), renameCase, deleteCase, deletedCases); newCase.Dock = DockStyle.Bottom;
+        var newCase = Ui.Bar(Ui.Button("＋ 用例を追加", AddCase), Ui.Button("CSV から用例作成…", ImportCases), renameCase, deleteCase, deletedCases); newCase.Dock = DockStyle.Bottom;
         sidebar.Controls.Add(cases); sidebar.Controls.Add(filter); sidebar.Controls.Add(newCase);
         var editor = new Panel { Dock = DockStyle.Fill, Padding = new(8, 0, 0, 0) }; editor.Controls.Add(tabs); editor.Controls.Add(caseHeading);
         layout.Controls.Add(sidebar, 0, 0); layout.Controls.Add(editor, 1, 0);
@@ -197,6 +197,17 @@ internal sealed class MainForm : Form
         bool clearedSearch = search.Text.Length > 0 && !(current!.Data.Id + " " + current.Data.Title).Contains(search.Text, StringComparison.CurrentCultureIgnoreCase);
         if (clearedSearch) search.Clear();
         status.Text = "用例名を変更して保存しました。" + (clearedSearch ? "旧名の検索条件を解除しました。" : "");
+    }
+    private void ImportCases()
+    {
+        if (exporting) return;
+        if (workspace == null) throw new InvalidOperationException("プロジェクトを開いてください。");
+        if (!ResolveDraft()) return;
+        using var dialog = new CaseImportForm(workspace); dialog.ShowDialog(this);
+        if (dialog.CreatedIds.Count == 0) return;
+        caseList = workspace.ListCases(); LoadCase(workspace.LoadCase(dialog.CreatedIds[0]));
+        search.Clear(); ngOnly.Checked = false; FilterCases(); tabs.SelectedIndex = 1;
+        status.Text = $"CSV から {dialog.CreatedIds.Count} 件の用例を作成しました。";
     }
     private void DeleteCurrentCase()
     {
@@ -526,20 +537,22 @@ internal sealed class MainForm : Form
         try
         {
             if (workspace == null) throw new InvalidOperationException("プロジェクトを開いてください。");
-            using var settings = new ExportOptionsForm(workspace.LoadExportOptions());
+            using var settings = new ExportOptionsForm(workspace.LoadExportOptions(), current?.Data.Id, title.Text);
             if (settings.ShowDialog(this) != DialogResult.OK) return;
-            using var d = new FolderBrowserDialog { Description = "成果物の出力先（新しい日時フォルダーを作成します）", UseDescriptionForTitle = true, SelectedPath = workspace.Root };
+            string? caseId = settings.CaseId;
+            string scope = caseId == null ? "全用例" : "用例 " + caseId + " のみ";
+            using var d = new FolderBrowserDialog { Description = scope + " の出力先（新しい日時フォルダーを作成します）", UseDescriptionForTitle = true, SelectedPath = workspace.Root };
             if (d.ShowDialog(this) != DialogResult.OK) return;
             if (current != null) Save();
             var options = settings.Options;
             string result = await RunStorageAsync(() =>
             {
                 workspace.SaveExportOptions(options);
-                return Export.Deliver(workspace, d.SelectedPath, options);
-            }, "選択した項目で Excel・添付・ZIP を出力しています…");
-            status.Text = "出力完了：" + result;
+                return Export.Deliver(workspace, d.SelectedPath, options, caseId);
+            }, scope + "：Excel・添付・ZIP を出力しています…");
+            status.Text = scope + " の出力完了：" + result;
             // Open only Explorer, never an HTML file or browser.
-            if (MessageBox.Show(this, "Excel・添付・ZIP を出力しました。\n\n" + result + "\n\n保存先フォルダーを開きますか？", "出力完了", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+            if (MessageBox.Show(this, scope + " の Excel・添付・ZIP を出力しました。\n\n" + result + "\n\n保存先フォルダーを開きますか？", "出力完了", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
                 Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { result }, UseShellExecute = false });
         }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "出力できませんでした", MessageBoxButtons.OK, MessageBoxIcon.Warning); }

@@ -24,12 +24,23 @@ public sealed record ExportOptions
         _ => true
     };
 
-    internal ProjectSnapshot Select(ProjectSnapshot snapshot) => new(snapshot.Project, snapshot.Cases.Select(c =>
+    internal ProjectSnapshot Select(ProjectSnapshot snapshot, string? caseId = null)
     {
-        var data = Contract.Clone(c.Data);
-        data.Evidence = data.Evidence.Where(Includes).ToList();
-        return new CaseSnapshot(data, c.Evidence.Where(e => Includes(e.Metadata)).ToList());
-    }).ToList());
+        var cases = snapshot.Cases;
+        if (caseId != null)
+        {
+            Contract.Id(caseId);
+            cases = cases.Where(c => c.Data.Id.Equals(caseId, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (cases.Count != 1 || cases[0].Data.Id != caseId)
+                throw new InvalidDataException("出力する用例を特定できません。用例を選び直してください。");
+        }
+        return new(snapshot.Project, cases.Select(c =>
+        {
+            var data = Contract.Clone(c.Data);
+            data.Evidence = data.Evidence.Where(Includes).ToList();
+            return new CaseSnapshot(data, c.Evidence.Where(e => Includes(e.Metadata)).ToList());
+        }).ToList());
+    }
 }
 
 public sealed partial class Workspace

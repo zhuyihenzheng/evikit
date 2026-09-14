@@ -4,4 +4,5 @@
     <ProjectReference Include="../../src/Evikit.Core/Evikit.Core.csproj" />
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
   </ItemGroup>
+  <ItemGroup><None Include="../../examples/case-template.csv" Link="case-template.csv" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>

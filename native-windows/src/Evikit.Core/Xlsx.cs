@@ -49,9 +49,9 @@ public static class Xlsx
     }
     private static string Col(int n) { string s = ""; while (n > 0) { n--; s = (char)('A' + n % 26) + s; n /= 26; } return s; }
     private static int VerdictStyle(string v) => v switch { "OK" => 3, "NG" => 4, "保留" => 5, _ => 0 };
-    public static void Write(ProjectSnapshot snapshot, string output, ExportOptions? options = null)
+    public static void Write(ProjectSnapshot snapshot, string output, ExportOptions? options = null, string? caseId = null)
     {
-        options ??= new(); snapshot = options.Select(snapshot);
+        options ??= new(); snapshot = options.Select(snapshot, caseId);
         List<string> headers = ["No.", "用例", "タイトル"]; List<int> widths = [6, 36, 32];
         if (options.Tester) { headers.Add("担当"); widths.Add(32); }
         int verdictColumn = headers.Count; headers.Add("判定"); widths.Add(8);

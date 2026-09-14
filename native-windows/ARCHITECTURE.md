@@ -78,3 +78,14 @@ alpha 0.3 新增 `Evidence.Images: List<ImageItem>?`。为空时使用旧单文�
 Workspace 流式暂存先按 image / video-file / other-file 筛选，再读取与验证所选证据。未选中的图片、视频和附件不会被读取或复制，缺失的已排除附件不阻止输出；所选证据仍做哈希和原图验证，最后检查全部 YAML revision。`ExportOptions.Select` 复制用例数据以筛选 Step 证据引用，不改变编辑快照或源文件。内存快照导出与直接 `Xlsx.Write` 也显式接收相同选项。
 
 日期、担当者、环境、条件、备注、出典由 Excel 渲染器控制；摘要列、合并终点、判定样式位置和冻结行随实际版式调整。表和日志正文保留，不做内容脱敏或日期删除。导出时间仍用于目录和 manifest；manifest 记录选项和实际交付文件哈希。客户端侧文件、原 YAML 和回收记录不进入 ZIP。浏览器版没有实现此设置。
+
+
+## alpha 0.6 単用例出力と CSV 用例作成
+
+`Export.Deliver(workspace/snapshot, outputRoot, options, caseId)` と `Xlsx.Write(snapshot, path, options, caseId)` は任意の用例 ID を受け取ります。null は従来どおり全用例。Workspace 経由では指定 ID のファイル名重複を確認した後、その用例の YAML と選択した証拠だけを読み、プロジェクトと指定用例の revision を再確認します。存在しない ID・曖昧な ID は拒否し、全用例にはフォールバックしません。manifest.scope に mode と実際の caseIds を記録します。UI の出力範囲は呼出しごとに選択し、永続設定の ExportOptions には混ぜません。
+
+`CaseCsv.Parse` は既存 CSV/TSV パーサを使用し、列名エイリアス、ケース共通情報の整合、用例 ID、Step 番号、判定を検証して TestCase リストを作ります。同一 ID は初出順に集約し、Step は行順・文字列のまま保持。Step 番号は集合と最大値で管理し、行数に対して線形に検査します。証拠は空で始まります。
+
+`ValidateCaseImport` は全件のデータ・予約済み ID・出力先を検査して YAML をシリアライズするだけです。`ImportCases` は同じ検査をやり直し、File.Move の上書き禁止を使って用例ごとに確定します。形式/ID エラーでは 0 件、保存途中の I/O エラーでは CaseImportResult に確定済み ID と失敗 ID を返します。全用例一括の原子性やクラッシュ時ロールバックは保証しません。UI は成功分を保持して残りを再試行対象にし、ウィンドウを閉じても作成済み用例を一覧に反映します。既存ファイル・元 CSV は変更しません。
+
+CSV テンプレートはコードと配布ファイルの両方にあり、パース結果の一致をテストします。配布 CSV は Excel が UTF-8 と認識できる BOM 付きです。ブラウザ実装・共有 YAML 契約に変更はありません。

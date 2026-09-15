@@ -163,6 +163,7 @@ try
     ExportOptionChecks.Run(root, Check);
     ExportScopeChecks.Run(root, Check);
     CaseCsvChecks.Run(root, Check);
+    EvidenceTextChecks.Run(root, Check);
     Console.WriteLine($"{passed} checks passed. Artifacts: {root}");
 }
 catch (Exception ex) { Console.Error.WriteLine(ex); Console.Error.WriteLine("Failure artifacts: " + root); Environment.ExitCode = 1; }

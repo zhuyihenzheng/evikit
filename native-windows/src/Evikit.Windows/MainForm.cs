@@ -394,7 +394,9 @@ internal sealed class MainForm : Form
     }
     private void PasteEvidence()
     {
-        NeedCase(); if (Clipboard.ContainsImage()) { using var image = Clipboard.GetImage(); if (image != null) { if ((long)image.Width * image.Height > 80_000_000) throw new InvalidDataException("画像が大きすぎます。");
+        NeedCase();
+        if (EvidenceClipboard.TableText() is { } tableText) { AddEvidence(text: tableText); return; }
+        if (Clipboard.ContainsImage()) { using var image = Clipboard.GetImage(); if (image != null) { if ((long)image.Width * image.Height > 80_000_000) throw new InvalidDataException("画像が大きすぎます。");
             if (tabs.SelectedIndex == 2 && evidence.CurrentRow?.DataBoundItem is Evidence { Kind: "image" } selected)
             {
                 string id = selected.Id; Save(); LoadCase(workspace!.AppendImage(current!, id, new("image", "画面", "貼り付け画像", selected.Step, "クリップボード", "", "", Ui.Png(image), "png"))); SelectEvidence(id);

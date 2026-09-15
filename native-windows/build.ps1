@@ -13,6 +13,8 @@ try {
     if (-not $SkipChecks) {
         dotnet run --project tests/Evikit.Checks -c Release -- ../examples/reference
         if ($LASTEXITCODE -ne 0) { throw 'Core checks failed.' }
+        dotnet run --project tests/Evikit.WindowsChecks -c Release
+        if ($LASTEXITCODE -ne 0) { throw 'Windows clipboard/dialog checks failed.' }
     }
     $target = Join-Path $PSScriptRoot "artifacts/evikit-$Runtime"
     dotnet publish src/Evikit.Windows -c Release -r $Runtime --self-contained true -p:PublishSingleFile=false -p:DebugType=None -o $target

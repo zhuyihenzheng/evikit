@@ -89,3 +89,11 @@ Workspace 流式暂存先按 image / video-file / other-file 筛选，再读取�
 `ValidateCaseImport` は全件のデータ・予約済み ID・出力先を検査して YAML をシリアライズするだけです。`ImportCases` は同じ検査をやり直し、File.Move の上書き禁止を使って用例ごとに確定します。形式/ID エラーでは 0 件、保存途中の I/O エラーでは CaseImportResult に確定済み ID と失敗 ID を返します。全用例一括の原子性やクラッシュ時ロールバックは保証しません。UI は成功分を保持して残りを再試行対象にし、ウィンドウを閉じても作成済み用例を一覧に反映します。既存ファイル・元 CSV は変更しません。
 
 CSV テンプレートはコードと配布ファイルの両方にあり、パース結果の一致をテストします。配布 CSV は Excel が UTF-8 と認識できる BOM 付きです。ブラウザ実装・共有 YAML 契約に変更はありません。
+
+## alpha 0.6.1 DB 貼り付けの自動認識
+
+`EvidenceText.Analyze` は新規証拠の CSV/TSV を判定します。自動モードは 2 列以上・ヘッダー + データ行を要求し、整合しない入力は理由付きの text として扱います。JSON は表にしません。明示的な text/table 指定を優先。保存済みデータ・CaseCsv・Tables.Parse の契約は変更していません。
+
+`EvidenceDialog` は Ctrl+V を含む TextChanged で 250 ms 後に解析し、原文と別の読み取り専用グリッドに先頭 500 行を表示。解析待ち・手動 table の解析失敗では追加を無効にし、古い表示を消します。Save でも最新本文を解析。入力欄は既定の 32,767 文字制限を広げ、既存の UTF-8 2 MiB 制限で検査します。EvidenceClipboard はクリップボードに画像と表が共存する場合、構造化された表を優先します。
+
+WindowsChecks は本体の WinForms ダイアログと Windows クリップボードを使う回帰プログラムで、build.ps1 / Windows CI で実行します。実ユーザーのプロジェクトを使用しません。RDP・DPI・IME・実 Excel の受入試験とは別です。
